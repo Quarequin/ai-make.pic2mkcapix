@@ -1,1 +1,595 @@
-:root{--img-range:30rem}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Open Sans","Helvetica Neue",sans-serif;font-size:14px;padding:10px;border-radius:12px;background-color:#000;color:#fff}input[disabled]{pointer-events:none}#parameters{border:1px solid green;background:#000;color:white;margin:10px 0;padding:15px;border-radius:.3em;display:flex;flex-direction:column;gap:20px}.settings-group{display:flex;flex-direction:row;gap:30px;align-items:flex-start}.half{flex:1;min-width:300px}.size-settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:center;background:#111;padding:15px;border-radius:6px;border:1px solid #222;margin-bottom:15px}.size-settings-grid label{margin:0;display:flex;align-items:center;gap:8px;cursor:pointer}.size-settings-grid input[type="number"]{margin:0;width:100%;box-sizing:border-box}.full-row{grid-column:span 2}.action-buttons{display:flex;flex-direction:row;gap:10px;width:100%;margin-top:15px}.action-buttons button{flex:1;min-width:0;color:#fff;background-color:#000;border:1px solid #fff;border-radius:1em;padding:12px 8px;cursor:pointer;font-size:13px;text-align:center;white-space:wrap}.action-buttons button:disabled{border-color:#444;color:#666;cursor:not-allowed}.colorboard{flex:1.2}.colorboard .colorpad{display:grid;grid-template-columns:repeat(auto-fill,minmax(11rem,1fr));gap:8px;margin-top:10px}.colorboard .colorpad .color-pair{display:flex;flex-direction:row;align-items:center;gap:5px;background:#111;padding:6px;border-radius:4px;border:1px solid #333}.colorboard .colorpad .color-pair label{margin:0;min-width:45px;font-size:12px}.colorboard .colorpad .color-pair .colortext{margin:0;width:100%}label{display:block;margin:10px 0}input{background-color:#000;border-color:#fff;color:#fff;border-style:solid;border-radius:.3em;padding:5px}input.colortext[type="text"]{width:4.5rem}textarea{clear:both;display:block;border-radius:1.2em;background-color:#000;color:#fff;width:100%;padding:10px;min-height:20rem;box-sizing:border-box;margin-top:15px}#status{margin-bottom:10px;background-color:lemonchiffon;color:#333;padding:5px;border-radius:.3em;display:inline-block}.image-preview-container{display:none;flex-direction:row;gap:20px;justify-content:flex-start;align-items:flex-start;margin:20px 0;max-width:100%;box-sizing:border-box}.preview-box{flex:1;min-width:0;background:#111;border:1px dashed #fff09d;border-radius:8px;padding:12px;display:flex;flex-direction:column;align-items:center}.preview-box h3{margin-top:0;margin-bottom:10px;font-size:13px;color:#ccc;align-self:flex-start}#original-preview-zone{width:100%;display:flex;justify-content:center;align-items:center}#original-preview-zone img,canvas{max-width:100%;height:auto!important;object-fit:contain;background-image:linear-gradient(45deg,#222 25%,transparent 25%),linear-gradient(-45deg,#222 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#222 75%),linear-gradient(-45deg,transparent 75%,#222 75%);background-size:10px 10px;background-position:0 0,0 5px,5px -5px,-5px 0;background-color:#151515;border-radius:4px;box-sizing:border-box;padding:5px;margin:0;display:block}.resolution-info{font-size:11px;color:#fff09d;background:#222;padding:4px 8px;border-radius:4px;margin-bottom:8px;border:1px solid #333;font-family:monospace;align-self:flex-start}div.output{display:block;width:100%;padding:0;margin:0;border:0}body>img:not(.show){position:absolute;right:-10000%;top:-10000%}#info{background-color:#000;border:1px solid hsl(100,50%,50%);color:white;margin-bottom:1em;padding:.5em 1.5em;border-radius:1.5em}input[type="file"]{background-color:#000;border-color:#fff;color:white;padding:.8em;border:1px dashed hsl(40,50%,50%);display:block;margin-bottom:15px;width:100%;max-width:400px;box-sizing:border-box}.mode-selection{padding:10px;border:1px dashed gray;border-radius:.5em}.color-pair input[type="color"]{margin-right:5px;padding:0;height:25px;width:25px;border:0;cursor:pointer}.palette-loader-container{margin-bottom:15px;background:#111;padding:10px;border-radius:6px;border:1px solid #222}.palette-loader-container label{margin:0 0 8px 0;font-size:13px;color:#fff09d}.palette-loader-container input[type="file"]{margin:0;padding:5px;font-size:12px;border-color:#555}#notification-popup-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:10000;backdrop-filter:blur(2px);align-items:flex-start;justify-content:center;padding-top:50px;box-sizing:border-box}.popup-error-card{background:#181818;color:#fa5;border:1px solid #f72;border-radius:8px;width:90%;max-width:550px;box-shadow:0 10px 30px rgba(0,0,0,0.7);font-family:monospace;overflow:hidden;animation:slideDownFade .3s ease-out}.popup-header{background:#281810;padding:12px 16px;font-weight:bold;border-bottom:1px solid #482818;display:flex;justify-content:space-between;align-items:center}.popup-body{padding:16px;font-size:13px}.popup-controls{margin-top:12px;display:flex;gap:10px}.popup-toggle-btn{background:#333;color:#fa5;border:1px solid #f72;padding:5px 10px;cursor:pointer;border-radius:4px;font-size:11px}.popup-toggle-btn:hover{background:#444}.popup-body pre{display:none;background:#0d0d0d;padding:10px;border-radius:4px;border:1px solid #252525;overflow-x:auto;color:#f88;font-size:12px;margin-top:10px;max-height:200px;overflow-y:auto}.popup-close-btn{background:#f72;color:#000;border:0;padding:6px 14px;cursor:pointer;font-family:monospace;font-weight:bold;border-radius:4px;font-size:12px}.popup-close-btn:hover{background:#ffa055}@keyframes slideDownFade{from{transform:translateY(-20px);opacity:0}to{transform:translateY(0);opacity:1}}@media(max-width:900px){.settings-group{flex-direction:column;gap:25px}.half{width:100%;min-width:0}.colorboard{width:100%}.colorboard .colorpad{grid-template-columns:repeat(auto-fill,minmax(8rem,1fr))}.colorboard .colorpad .color-pair{gap: 2px 1px}.image-preview-container{flex-direction:column}}
+/* กำหนด Box-Sizing ทั่วทั้งเอกสารล่วงหน้า เพื่อให้การคิด % ความกว้างแม่นยำ 100% แม้มี Padding/Border */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+:root {
+  --img-range: 30rem;
+  --main-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+}
+
+body {
+  font-family: var(--main-font);
+  font-size: 14px;
+  padding: 15px;
+  border-radius: 12px;
+  background-color: #000;
+  color: #fff;
+  /* เพิ่ม Max-width เพื่อไม่ให้หน้าจอกว้างเกินไปบนจอคอมพิวเตอร์ขนาดใหญ่ */
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+input[disabled] {
+  pointer-events: none;
+}
+
+#parameters {
+  border: 1px solid #00ff00;
+  background: #000;
+  color: white;
+  margin: 5px 0;
+  padding: 7.5px;
+  border-radius: 0.3em;
+  display: block;
+}
+
+#parameters > * {
+  margin-bottom: 20px;
+}
+
+#parameters > *:last-child {
+  margin-bottom: 0;
+}
+
+.settings-group {
+  display: block;
+}
+
+/* ล้างค่า Float ป้องกัน Element ถัดไปดันทะลุ (เทคนิคคลาสสิกทดแทน Flex/Grid) */
+.settings-group::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+.half {
+  float: left;
+  width: 48%;
+  min-width: 300px;
+}
+
+.size-settings-grid {
+  background: #111;
+  padding: 7px;
+  border-radius: 6px;
+  border: 1px solid #222;
+  margin-bottom: 15px;
+}
+
+.size-settings-grid::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+.size-settings-grid label {
+  margin: 6px 0;
+  display: block;
+  cursor: pointer;
+}
+
+.size-settings-grid label.full-row {
+  width: 100%;
+  clear: both;
+}
+
+.size-settings-grid label:not(.full-row) {
+  float: left;
+  width: 45%;
+  padding-top: 4px;
+}
+
+.size-settings-grid input[type="number"] {
+  margin: 4px 0;
+  float: right;
+  width: 50%;
+}
+
+/* Dropdown styling updates */
+.dropdown-selection-group {
+  padding: 12px;
+  border: 1px dashed gray;
+  border-radius: 0.5em;
+  clear: both;
+  margin-top: 15px;
+  background: #0a0a0a;
+  display: block;
+}
+
+.dropdown-label {
+  margin-top: 0; 
+  margin-bottom: 8px;
+  font-weight: bold; 
+  color: rgb(255, 240, 157);
+  display: block;
+}
+
+.custom-dropdown {
+  width: 100%;
+  background-color: #000;
+  color: #fff;
+  border: 1px solid #fff;
+  border-radius: 0.3em;
+  padding: 8px;
+  font-family: var(--main-font);
+  font-size: 13px;
+  display: block;
+}
+
+.action-buttons {
+  display: block;
+  width: 100%;
+  margin-top: 15px;
+  text-align: center;
+}
+
+.action-buttons::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+.action-buttons button {
+  display: block;
+  float: left;
+  width: 32%;
+  margin-right: 2%;
+  color: #fff;
+  background-color: #000;
+  border: 1px solid #fff;
+  border-radius: 1em;
+  padding: 12px 8px;
+  cursor: pointer;
+  font-size: 13px;
+  text-align: center;
+  white-space: wrap;
+}
+
+.action-buttons button:last-child {
+  margin-right: 0;
+}
+
+.action-buttons button:disabled {
+  border-color: #444;
+  border-style: dashed;
+  color: #666;
+  cursor: not-allowed;
+}
+
+.colorboard {
+  float: right;
+  width: 48%;
+}
+
+.colorboard .colorpad {
+  display: block;
+  margin-top: 10px;
+}
+
+.colorboard .colorpad::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+.colorboard .colorpad .color-pair {
+  display: block;
+  float: left;
+  width: 31.33%; /* ปรับสัดส่วนให้ปลอดภัยบนจอ Desktop */
+  margin: 1% 1% 1% 0;
+  background: #111;
+  padding: 6px;
+  border-radius: 4px;
+  border: 1px solid #333;
+}
+
+.colorboard .colorpad .color-pair input[type="color"] {
+    padding: 0px;
+    width: 1.3em;
+    margin-right: 5px;
+}
+
+.colorboard .colorpad .color-pair label {
+  display: inline-block;
+  margin: 0;
+  width: 50px;
+  font-size: 11px;
+  vertical-align: middle;
+}
+
+.colorboard .colorpad .color-pair .colortext {
+  display: inline-block;
+  margin: 0;
+  width: calc(100% - 75px);
+  font-size: 11px;
+  padding: 2px;
+  vertical-align: middle;
+  font-family: monospace;
+}
+
+label {
+  display: block;
+  margin: 10px 0;
+}
+
+input {
+  background-color: #000;
+  border-color: #fff;
+  color: #fff;
+  border-style: solid;
+  border-radius: 0.3em;
+  padding: 5px;
+  font-family: var(--main-font);
+}
+
+/* ==========================================
+   แก้ไขและปรับปรุงโครงสร้าง TEXTAREA OUTPUT ตามที่ระบุ
+   ========================================== */
+textarea {
+  clear: both;
+  display: block;
+  border-radius: 1.2em;
+  background-color: #000;
+  color: #00ff00; /* เปลี่ยนสีอักษรเป็นเขียวสไตล์ Terminal ให้อ่านง่าย */
+  width: 100%;
+  padding: 15px;
+  min-height: 20rem;
+  margin-top: 15px;
+  
+  /* ฟีเจอร์ที่สั่งปรับปรุง */
+  resize: none;             /* ห้ามผู้ใช้ลากยืดขยายแท็กขอบขวาล่างเอง */
+  white-space: pre;         /* ปิดการใช้ text-wrap ทั่วไป บังคับขึ้นแถวใหม่ตามข้อมูลรูปภาพจริง */
+  overflow: auto;           /* เปิดระบบ Scrollbar แนวนอนและแนวตั้งอัตโนมัติให้เด่นชัดขึ้นเมื่อข้อความล้น */
+  font-family: monospace;   /* บังคับใช้ฟอนต์ Monospace เพื่อให้ตำแหน่งพิกเซลเรียงเป็นบล็อกสี่เหลี่ยมสวยงาม */
+}
+
+#status {
+  margin-bottom: 10px;
+  background-color: lemonchiffon;
+  color: #333;
+  padding: 5px;
+  border-radius: 0.3em;
+  display: inline-block;
+  font-weight: bold;
+}
+
+.image-preview-container {
+  display: none;
+  margin: 20px 0;
+  width: 100%;
+}
+
+.image-preview-container::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+.preview-box {
+  display: block;
+  float: left;
+  width: 49%;
+  margin-right: 2%;
+  background: #111;
+  border: 1px dashed rgb(255, 240, 157);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.preview-box:last-child {
+  margin-right: 0;
+  float: right;
+}
+
+.preview-box h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #ccc;
+}
+
+#original-preview-zone {
+  width: 100%;
+  display: block;
+  text-align: center;
+}
+
+#original-preview-zone img, canvas {
+  width: 100%;
+  height: auto !important;
+  object-fit: contain;
+  image-rendering: pixelated;
+  background-image: linear-gradient(45deg, #222 25%, transparent 25%), 
+                    linear-gradient(-45deg, #222 25%, transparent 25%), 
+                    linear-gradient(45deg, transparent 75%, #222 75%), 
+                    linear-gradient(-45deg, transparent 75%, #222 75%);
+  background-size: 10px 10px;
+  background-position: 0 0, 0 5px, 5px -5px, -5px 0px;
+  background-color: #151515;
+  border-radius: 4px;
+  padding: 5px;
+  margin: 0 auto;
+  display: block;
+}
+
+.resolution-info {
+  font-size: 11px;
+  color: rgb(255, 240, 157);
+  background: #222;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  border: 1px solid #333;
+  font-family: monospace;
+  display: inline-block;
+}
+
+div.output {
+  display: block;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  border: none;
+  text-align: center;
+}
+
+body > img:not(.show) {
+  position: absolute;
+  right: -10000%;
+  top: -10000%;
+}
+
+#info {
+  background-color: #000;
+  border: 1px solid hsl(100, 50%, 50%);
+  color: white;
+  margin-bottom: 1em;
+  padding: 0.5em 1.5em;
+  border-radius: 1.5em;
+}
+
+input[type="file"] {
+  background-color: #000;
+  border-color: #fff;
+  color: white;
+  padding: 0.8em;
+  border: 1px dashed hsl(40, 50%, 50%);
+  display: block;
+  margin-bottom: 15px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.palette-loader-container {
+  margin-bottom: 15px;
+  background: #111;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #222;
+  display: block;
+}
+
+.palette-loader-container label {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  color: rgb(255, 240, 157);
+  display: block;
+}
+
+.palette-loader-container input[type="file"] {
+  margin: 0;
+  padding: 5px;
+  font-size: 12px;
+  border-color: #555;
+  display: block;
+}
+
+/* Modal Popup Exception styles */
+#notification-popup-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 10000;
+  backdrop-filter: blur(2px);
+  text-align: center;
+  padding-top: 50px;
+}
+
+.popup-error-card {
+  display: inline-block;
+  text-align: left;
+  background: #181818;
+  color: #ffaa55;
+  border: 1px solid #ff7722;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 550px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+  font-family: monospace;
+  overflow: hidden;
+  animation: slideDownFade 0.3s ease-out;
+}
+
+.popup-header {
+  background: #281810;
+  padding: 12px 16px;
+  font-weight: bold;
+  border-bottom: 1px solid #482818;
+}
+
+.popup-header span {
+  float: left;
+  line-height: 24px;
+}
+
+.popup-header .popup-close-btn {
+  float: right;
+}
+
+.popup-header::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+.popup-body {
+  padding: 16px;
+  font-size: 13px;
+}
+
+.popup-controls {
+  margin-top: 12px;
+  display: block;
+}
+
+.popup-toggle-btn {
+  background: #333;
+  color: #ffaa55;
+  border: 1px solid #ff7722;
+  padding: 5px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.popup-toggle-btn:hover {
+  background: #444;
+}
+
+.popup-body pre {
+  display: none;
+  background: #0d0d0d;
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid #252525;
+  overflow-x: auto;
+  color: #ff8888;
+  font-size: 12px;
+  margin-top: 10px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.popup-close-btn {
+  background: #ff7722;
+  color: #000;
+  border: none;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-family: monospace;
+  font-weight: bold;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.popup-close-btn:hover {
+  background: #ffa055;
+}
+
+@keyframes slideDownFade {
+  from { transform: translateY(-20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* ==========================================
+   CSS RESPONSIVE LAYER (คุมระบบด้วย Float & Percentages เท่านั้น - ไร้ Flex และ Grid)
+   ========================================== */
+
+/* สำหรับหน้าจอระดับแท็บเล็ต หรือเมื่อหน้าต่างมีขนาดเล็กกว่า 960px */
+@media (max-width: 960px) {
+  body {
+    padding: 10px;
+  }
+  .half, .colorboard {
+    float: none;   /* ยกเลิกการขนานข้าง */
+    width: 100%;   /* ดันเต็มหน้าจอแนวตั้ง */
+    margin-bottom: 25px;
+  }
+  .colorboard .colorpad .color-pair {
+    width: calc(100% / 3.2) /*31.33%*/;    /* ปรับเป็นกล่องคู่ 2 คอลัมน์แทน */
+    margin: 1%;
+  }
+  .preview-box {
+    float: none;
+    width: 100%;
+    margin-right: 0;
+    margin-bottom: 20px;
+  }
+}
+
+/* สำหรับหน้าจอมือถือขนาดกลาง (ต่ำกว่า 700px) ปุ่มสั่งการควรซ้อนแถวแนวตั้ง ไม่ควรอัดแนวนอนให้ข้อความบีบ */
+@media (max-width: 700px) {
+  .colorboard .colorpad .color-pair {
+    width: calc(100% / 3.15) /*31.33%*/;   /* บนจอมือถือเล็กสุด ให้กล่องเลือกสีเรียง 1 กล่องต่อ 1 บรรทัดป้องกันตัวหนังสือหลุด */
+    margin: 6px 3px;
+    /*float: none;*/
+  }
+  .action-buttons button {
+    width: 100%;   /* ดันปุ่มเต็มความกว้าง */
+    float: none;   /* จัดเรียงลงมาข้างล่างทีละปุ่ม */
+    margin-right: 0;
+    margin-bottom: 12px;
+  }
+  .action-buttons button:last-child {
+    margin-bottom: 0;
+  }
+}
+
+/* สำหรับสมาร์ตโฟนขนาดพกพา (ต่ำกว่า 480px) */
+@media (max-width: 480px) {
+  .colorboard .colorpad .color-pair {
+    width: 48%;   /* บนจอมือถือเล็กสุด ให้กล่องเลือกสีเรียง 1 กล่องต่อ 1 บรรทัดป้องกันตัวหนังสือหลุด */
+    margin: 6px 3px;
+    /*float: none;*/
+  }
+  .size-settings-grid label:not(.full-row) {
+    /*float: none;*/
+    width: 48%;
+  }
+  .colorboard .colorpad {   padding-left: calc((100% - round((48% + 3px) / 2)) / 2); }
+  .size-settings-grid input[type="number"] {
+    /*float: none;*/
+    width: 48%;
+    /*margin-bottom: 10px;*/
+  }
+}
+
+/* สำหรับสมาร์ตโฟนขนาดพกพา (ต่ำกว่า 300px) */
+@media (max-width: 340px) {
+  body {
+    max-width: 340px;
+  }
+  .colorboard .colorpad .color-pair {
+    width: 100%;   /* บนจอมือถือเล็กสุด ให้กล่องเลือกสีเรียง 1 กล่องต่อ 1 บรรทัดป้องกันตัวหนังสือหลุด */
+    margin: 6px 0;
+    float: none;
+  }
+  .size-settings-grid {
+    clear: both;
+    text-wrap: warp;
+  }
+  .size-settings-grid label:not(.full-row) {
+    float: none;
+    width: 100%;
+  }
+  .size-settings-grid input[type="number"] {
+    float: none;
+    width: 100%;
+    margin-bottom: 10px;
+  }
+}
