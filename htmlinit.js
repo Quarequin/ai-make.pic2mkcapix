@@ -2,24 +2,6 @@
 const BODY_HOME = document.getElementById("body-home");
 
 BODY_HOME.insertAdjacentHTML('beforeend',`
-    <div id="notification-popup-overlay">
-      <div class="popup-error-card">
-        <div class="popup-header">
-          <span>⚠️ PROCESS EXCEPTION DETECTED</span>
-          <button class="popup-close-btn" id="popup-close-btn">DISMISS</button>
-        </div>
-        <div class="popup-body">
-          <p style="margin: 0 0 6px 0;"><strong>Error Type:</strong> <span id="popup-err-type">N/A</span></p>
-          <p style="margin: 0 0 10px 0;"><strong>Message:</strong> <span id="popup-err-message">N/A</span></p>
-          <div class="popup-controls">
-            <button class="popup-toggle-btn" id="btn-toggle-log">ดู log ตัวเต็ม (Show Full Log) ▼</button>
-          </div>
-          <pre id="popup-err-stack">No trace details available.</pre>
-        </div>
-      </div>
-    </div>
-
-    <h2>Image to MakeCode Arcade Image-String Vector Converter</h2>
     <div id="info">
       <p>Upload your image to render into standard matrix asset code for MakeCode Arcade retro framework.</p>
     </div>
@@ -134,4 +116,21 @@ BODY_HOME.insertAdjacentHTML('beforeend',`
     </div>
 
     <textarea id="output" placeholder="The matrix assembly hex string will be generated into this layout sector..." readonly></textarea>
+    
+    <div id="notification-popup-overlay">
+      <div class="popup-error-card">
+        <div class="popup-header">
+          <span>⚠️ PROCESS EXCEPTION DETECTED</span>
+          <button class="popup-close-btn" id="popup-close-btn">DISMISS</button>
+        </div>
+        <div class="popup-body">
+          <p style="margin: 0 0 6px 0;"><strong>Error Type:</strong> <span id="popup-err-type">N/A</span></p>
+          <p style="margin: 0 0 10px 0;"><strong>Message:</strong> <span id="popup-err-message">N/A</span></p>
+          <div class="popup-controls">
+            <button class="popup-toggle-btn" id="btn-toggle-log">ดู log ตัวเต็ม (Show Full Log) ▼</button>
+          </div>
+          <pre id="popup-err-stack">No trace details available.</pre>
+        </div>
+      </div>
+    </div>
 `);
