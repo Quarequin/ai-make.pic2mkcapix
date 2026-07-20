@@ -1,40 +1,16 @@
-/* กำหนด Box-Sizing ทั่วทั้งเอกสารล่วงหน้า เพื่อให้การคิด % ความกว้างแม่นยำ 100% แม้มี Padding/Border */
-*, *::before, *::after {
-  box-sizing: border-box;
-}
+/* style.css — Optimized with display: block/inline/inline-block/none as primary */
+*, *::before, *::after { box-sizing: border-box; }
 
-/* ==========================================================================
-   THEME CONFIGURATION LAYER (EGA 3.1 / Windows 3.1 Fallback & Tokyo Night)
-   ========================================================================== */
-
-/* 1. Base / Fallback Theme: EGA 3.1 / Windows 3.1 Style 
-   (จะถูกนำมาใช้ทันทีหากบราวเซอร์เก่า หรือเมื่อเงื่อนไข @supports ไม่ทำงาน) */
 :root {
-  --bg-color: #0000aa;         /* EGA Dark Blue / Windows 3.1 Blue Screen Vibe */
-  --text-color: #ffffff;       /* Pure White Text */
-  --border-color: #ffffff;     /* Solid White Borders */
-  --accent-color: #ffff55;     /* EGA Bright Yellow */
-  --terminal-green: #55ff55;   /* EGA Bright Green */
-  --panel-bg: #008080;         /* Windows 3.1 Desktop Teal */
-  --status-bg: #aaaaaa;        /* EGA Light Gray */
-  --status-text: #000000;      /* Pure Black */
-  --main-font: "Courier New", Courier, monospace;
-}
-
-/* 2. Modern Theme: Tokyo Night (Night Variant)
-   (จะเปิดใช้งานผ่าน Feature Query @supports เมื่อระบบรองรับการคำนวณตัวแปร CSS ในรูปแบบก้าวหน้า) */
-@supports (--theme-engine: 'tokyo-night') {
-  :root {
-    --bg-color: #1a1b26;         /* Tokyo Night Deep Dark Background */
-    --text-color: #a9b1d6;       /* Tokyo Night Soft Foreground */
-    --border-color: #383e5a;     /* Muted Dark Blue-Grey Border */
-    --accent-color: #7aa2f7;     /* Tokyo Night Bright Blue Accent */
-    --terminal-green: #9ece6a;   /* Tokyo Night Friendly Vibrant Green */
-    --panel-bg: #1f2335;         /* Tokyo Night Storm Panel Background */
-    --status-bg: #e0af68;        /* Tokyo Night Warm Yellow/Orange Status */
-    --status-text: #1d202f;      /* Tokyo Night Dark Contrast Text */
-    --main-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
-  }
+  --bg-color: #1a1b26;
+  --text-color: #a9b1d6;
+  --border-color: #383e5a;
+  --accent-color: #7aa2f7;
+  --terminal-green: #9ece6a;
+  --panel-bg: #1f2335;
+  --status-bg: #e0af68;
+  --status-text: #1d202f;
+  --main-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
 }
 
 body {
@@ -44,14 +20,72 @@ body {
   border-radius: 12px;
   background-color: var(--bg-color);
   color: var(--text-color);
-  /* เพิ่ม Max-width เพื่อไม่ให้หน้าจอกว้างเกินไปบนจอคอมพิวเตอร์ขนาดใหญ่ */
   max-width: 1200px;
   margin: 0 auto;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-input[disabled] {
+input[disabled] { pointer-events: none; }
+
+/* ============================================================
+   PAGE LOADER
+   ============================================================ */
+#page-loader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg-color);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  transition: opacity 0.5s ease, visibility 0.5s ease;
+}
+
+#page-loader.hidden {
+  opacity: 0;
+  visibility: hidden;
   pointer-events: none;
+  display: none;
+}
+
+.loader-content {
+  text-align: center;
+  display: block;
+}
+
+.loader-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid var(--border-color);
+  border-top: 4px solid var(--accent-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px auto;
+  display: block;
+}
+
+.loader-text {
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--accent-color);
+  margin-bottom: 8px;
+  display: block;
+}
+
+.loader-sub {
+  font-size: 13px;
+  color: var(--text-color);
+  opacity: 0.7;
+  display: block;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 #parameters {
@@ -66,24 +100,21 @@ input[disabled] {
 
 #parameters > * {
   margin-bottom: 20px;
-}
-
-#parameters > *:last-child {
-  margin-bottom: 0;
-}
-
-.settings-group {
   display: block;
 }
 
-/* ล้างค่า Float ป้องกัน Element ถัดไปดันทะลุ (เทคนิคคลาสสิกทดแทน Flex/Grid) */
+#parameters > *:last-child { margin-bottom: 0; }
+
+.settings-group { display: block; }
+
 .settings-group::after {
   content: "";
-  display: table;
+  display: block;
   clear: both;
 }
 
 .half {
+  display: block;
   float: left;
   width: 48%;
   min-width: 300px;
@@ -95,11 +126,12 @@ input[disabled] {
   border-radius: 6px;
   border: 1px solid var(--border-color);
   margin-bottom: 15px;
+  display: block;
 }
 
 .size-settings-grid::after {
   content: "";
-  display: table;
+  display: block;
   clear: both;
 }
 
@@ -112,9 +144,11 @@ input[disabled] {
 .size-settings-grid label.full-row {
   width: 100%;
   clear: both;
+  display: block;
 }
 
 .size-settings-grid label:not(.full-row) {
+  display: block;
   float: left;
   width: 45%;
   padding-top: 4px;
@@ -122,11 +156,11 @@ input[disabled] {
 
 .size-settings-grid input[type="number"] {
   margin: 4px 0;
+  display: block;
   float: right;
   width: 50%;
 }
 
-/* Dropdown styling updates */
 .dropdown-selection-group {
   padding: 12px;
   border: 1px dashed var(--border-color);
@@ -138,9 +172,9 @@ input[disabled] {
 }
 
 .dropdown-label {
-  margin-top: 0; 
+  margin-top: 0;
   margin-bottom: 8px;
-  font-weight: bold; 
+  font-weight: bold;
   color: var(--accent-color);
   display: block;
 }
@@ -157,6 +191,17 @@ input[disabled] {
   display: block;
 }
 
+.custom-dropdown optgroup {
+  font-weight: bold;
+  color: var(--accent-color);
+  background: var(--panel-bg);
+}
+
+.custom-dropdown option {
+  color: var(--text-color);
+  background: var(--bg-color);
+}
+
 .action-buttons {
   display: block;
   width: 100%;
@@ -166,7 +211,7 @@ input[disabled] {
 
 .action-buttons::after {
   content: "";
-  display: table;
+  display: block;
   clear: both;
 }
 
@@ -183,11 +228,11 @@ input[disabled] {
   cursor: pointer;
   font-size: 13px;
   text-align: center;
-  white-space: wrap;
 }
 
 .action-buttons button:last-child {
   margin-right: 0;
+  display: block;
 }
 
 .action-buttons button:disabled {
@@ -199,6 +244,7 @@ input[disabled] {
 }
 
 .colorboard {
+  display: block;
   float: right;
   width: 48%;
 }
@@ -210,14 +256,14 @@ input[disabled] {
 
 .colorboard .colorpad::after {
   content: "";
-  display: table;
+  display: block;
   clear: both;
 }
 
 .colorboard .colorpad .color-pair {
   display: block;
   float: left;
-  width: 31.33%; /* ปรับสัดส่วนให้ปลอดภัยบนจอ Desktop */
+  width: 31.33%;
   margin: 1% 1% 1% 0;
   background: var(--panel-bg);
   padding: 6px;
@@ -226,9 +272,10 @@ input[disabled] {
 }
 
 .colorboard .colorpad .color-pair input[type="color"] {
-    padding: 0px;
-    width: 1.3em;
-    margin-right: 5px;
+  padding: 0px;
+  width: 1.3em;
+  margin-right: 5px;
+  display: inline-block;
 }
 
 .colorboard .colorpad .color-pair label {
@@ -249,10 +296,7 @@ input[disabled] {
   font-family: monospace;
 }
 
-label {
-  display: block;
-  margin: 10px 0;
-}
+label { display: block; margin: 10px 0; }
 
 input {
   background-color: var(--bg-color);
@@ -264,25 +308,20 @@ input {
   font-family: var(--main-font);
 }
 
-/* ==========================================
-   แก้ไขและปรับปรุงโครงสร้าง TEXTAREA OUTPUT
-   ========================================== */
 textarea {
   clear: both;
   display: block;
   border-radius: 1.2em;
   background-color: var(--bg-color);
-  color: var(--terminal-green); /* เปลี่ยนสีอักษรตามชุดสีของธีมที่เลือกใช้งาน */
+  color: var(--terminal-green);
   width: 100%;
   padding: 15px;
   min-height: 20rem;
   margin-top: 15px;
-  
-  /* ฟีเจอร์ที่สั่งปรับปรุง */
-  resize: none;             /* ห้ามผู้ใช้ลากยืดขยายแท็กขอบขวาล่างเอง */
-  white-space: pre;         /* ปิดการใช้ text-wrap ทั่วไป บังคับขึ้นแถวใหม่ตามข้อมูลรูปภาพจริง */
-  overflow: auto;           /* เปิดระบบ Scrollbar แนวนอนและแนวตั้งอัตโนมัติให้เด่นชัดขึ้นเมื่อข้อความล้น */
-  font-family: monospace;   /* บังคับใช้ฟอนต์ Monospace เพื่อให้ตำแหน่งพิกเซลเรียงเป็นบล็อกสี่เหลี่ยมสวยงาม */
+  resize: none;
+  white-space: pre;
+  overflow: auto;
+  font-family: monospace;
   border: 1px solid var(--border-color);
 }
 
@@ -304,7 +343,7 @@ textarea {
 
 .image-preview-container::after {
   content: "";
-  display: table;
+  display: block;
   clear: both;
 }
 
@@ -322,6 +361,7 @@ textarea {
 .preview-box:last-child {
   margin-right: 0;
   float: right;
+  display: block;
 }
 
 .preview-box h3 {
@@ -340,13 +380,14 @@ textarea {
 
 #original-preview-zone img, canvas {
   width: 100%;
-  height: auto !important;
+  height: auto;
   object-fit: contain;
   image-rendering: pixelated;
-  background-image: linear-gradient(45deg, #222 25%, transparent 25%), 
-                    linear-gradient(-45deg, #222 25%, transparent 25%), 
-                    linear-gradient(45deg, transparent 75%, #222 75%), 
-                    linear-gradient(-45deg, transparent 75%, #222 75%);
+  background-image:
+    linear-gradient(45deg, #222 25%, transparent 25%),
+    linear-gradient(-45deg, #222 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #222 75%),
+    linear-gradient(-45deg, transparent 75%, #222 75%);
   background-size: 10px 10px;
   background-position: 0 0, 0 5px, 5px -5px, -5px 0px;
   background-color: #151515;
@@ -390,6 +431,7 @@ body > img:not(.show) {
   margin-bottom: 1em;
   padding: 0.5em 1.5em;
   border-radius: 1.5em;
+  display: block;
 }
 
 input[type="file"] {
@@ -428,7 +470,6 @@ input[type="file"] {
   display: block;
 }
 
-/* Modal Popup Exception styles */
 #notification-popup-overlay {
   display: none;
   position: fixed;
@@ -463,27 +504,31 @@ input[type="file"] {
   padding: 12px 16px;
   font-weight: bold;
   border-bottom: 1px solid var(--border-color);
+  display: block;
+}
+
+.popup-header::after {
+  content: "";
+  display: block;
+  clear: both;
 }
 
 .popup-header span {
   float: left;
   line-height: 24px;
+  display: inline-block;
 }
 
 .popup-header .popup-close-btn {
   float: right;
-}
-
-.popup-header::after {
-  content: "";
-  display: table;
-  clear: both;
+  display: inline-block;
 }
 
 .popup-body {
   padding: 16px;
   font-size: 13px;
   color: var(--text-color);
+  display: block;
 }
 
 .popup-controls {
@@ -501,9 +546,7 @@ input[type="file"] {
   font-size: 11px;
 }
 
-.popup-toggle-btn:hover {
-  opacity: 0.9;
-}
+.popup-toggle-btn:hover { opacity: 0.9; }
 
 .popup-body pre {
   display: none;
@@ -531,94 +574,203 @@ input[type="file"] {
   font-size: 12px;
 }
 
-.popup-close-btn:hover {
-  opacity: 0.9;
-}
+.popup-close-btn:hover { opacity: 0.9; }
 
 @keyframes slideDownFade {
   from { transform: translateY(-20px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
 
+.palette-header-row {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.palette-header-row::after {
+  content: "";
+  display: block;
+  clear: both;
+}
+
+.palette-header-row > span {
+  float: left;
+  line-height: 28px;
+  display: inline-block;
+}
+
+.palette-action-btns {
+  float: right;
+  display: inline-block;
+}
+
+.palette-slot-btn {
+  background: var(--bg-color);
+  color: var(--accent-color);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 3px 9px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: var(--main-font);
+  margin-left: 4px;
+}
+
+.palette-slot-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.palette-slot-btn:hover:not(:disabled) {
+  background: var(--panel-bg);
+}
+
+.output-tabs {
+  display: block;
+  margin-top: 15px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.output-tabs::after {
+  content: "";
+  display: block;
+  clear: both;
+}
+
+.tab-btn {
+  display: block;
+  float: left;
+  background: var(--bg-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  padding: 7px 18px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: var(--main-font);
+  margin-right: 4px;
+  opacity: 0.6;
+}
+
+.tab-btn.active {
+  background: var(--panel-bg);
+  color: var(--accent-color);
+  opacity: 1;
+  font-weight: bold;
+  border-bottom: 1px solid var(--panel-bg);
+  margin-bottom: -1px;
+  position: relative;
+  z-index: 1;
+}
+
+.tab-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.tab-panel { display: none; }
+
+.tab-panel.active { display: block; }
+
+#ascii-output {
+  font-size: 9px;
+  line-height: 1.1;
+  letter-spacing: 0;
+  white-space: pre;
+}
+
+#ascii-sub-options {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-color);
+  display: none;
+}
+
+#ascii-sub-options label {
+  margin: 6px 0 4px 0;
+  font-size: 12px;
+  color: var(--accent-color);
+  display: block;
+}
+
+#ascii-width-input {
+  width: 80px;
+  display: inline-block;
+}
+
 /* ==========================================================================
-   CSS RESPONSIVE LAYER (คุมระบบด้วย Float & Percentages เท่านั้น - ไร้ Flex และ Grid)
+   RESPONSIVE LAYER (Float & Percentages only)
    ========================================================================== */
 
-/* สำหรับหน้าจอระดับแท็บเล็ต หรือเมื่อหน้าต่างมีขนาดเล็กกว่า 960px */
 @media (max-width: 960px) {
-  body {
-    padding: 10px;
-  }
+  body { padding: 10px; }
   .half, .colorboard {
-    float: none;   /* ยกเลิกการขนานข้าง */
-    width: 100%;   /* ดันเต็มหน้าจอแนวตั้ง */
+    float: none;
+    width: 100%;
     margin-bottom: 25px;
+    display: block;
   }
   .colorboard .colorpad .color-pair {
-    width: calc(100% / 3.2);    /* ปรับเป็นกล่องคู่ 2 คอลัมน์แทน */
+    width: 31.33%;
     margin: 1%;
+    display: block;
   }
   .preview-box {
     float: none;
     width: 100%;
     margin-right: 0;
     margin-bottom: 20px;
+    display: block;
   }
 }
 
-/* สำหรับหน้าจอมือถือขนาดกลาง (ต่ำกว่า 700px) ปุ่มสั่งการควรซ้อนแถวแนวตั้ง */
 @media (max-width: 700px) {
   .colorboard .colorpad .color-pair {
-    width: calc(100% / 3.15);   /* บนจอมือถือเล็กสุด ให้กล่องเลือกสีเรียง 1 กล่องต่อ 1 บรรทัดป้องกันตัวหนังสือหลุด */
+    width: 31.33%;
     margin: 6px 3px;
+    display: block;
   }
   .action-buttons button {
-    width: 100%;   /* ดันปุ่มเต็มความกว้าง */
-    float: none;   /* จัดเรียงลงมาข้างล่างทีละปุ่ม */
+    width: 100%;
+    float: none;
     margin-right: 0;
     margin-bottom: 12px;
+    display: block;
   }
   .action-buttons button:last-child {
     margin-bottom: 0;
+    display: block;
   }
 }
 
-/* สำหรับสมาร์ตโฟนขนาดพกพา (ต่ำกว่า 480px) */
 @media (max-width: 480px) {
   .colorboard .colorpad .color-pair {
-    width: 48%;   /* บนจอมือถือเล็กสุด ให้กล่องเลือกสีเรียง 1 กล่องต่อ 1 บรรทัดป้องกันตัวหนังสือหลุด */
+    width: 48%;
     margin: 6px 3px;
+    display: block;
   }
-  .size-settings-grid label:not(.full-row) {
-    width: 48%;
-  }
-  .colorboard .colorpad {   padding-left: calc((100% - round((48% + 3px) / 2)) / 2); }
-  .size-settings-grid input[type="number"] {
-    width: 48%;
-  }
+  .size-settings-grid label:not(.full-row) { width: 48%; }
+  .size-settings-grid input[type="number"] { width: 48%; }
 }
 
-/* สำหรับสมาร์ตโฟนขนาดพกพา (ต่ำกว่า 340px) */
 @media (max-width: 340px) {
-  body {
-    max-width: 340px;
-  }
+  body { max-width: 340px; }
   .colorboard .colorpad .color-pair {
-    width: 100%;   
+    width: 100%;
     margin: 6px 0;
     float: none;
+    display: block;
   }
-  .size-settings-grid {
-    clear: both;
-    text-wrap: wrap;
-  }
+  .size-settings-grid { clear: both; }
   .size-settings-grid label:not(.full-row) {
     float: none;
     width: 100%;
+    display: block;
   }
   .size-settings-grid input[type="number"] {
     float: none;
     width: 100%;
     margin-bottom: 10px;
+    display: block;
   }
 }
