@@ -704,6 +704,7 @@ input[type="file"] {
 
 @media (max-width: 960px) {
   body { padding: 10px; }
+  #status { position: sticky; top: 10px; z-index: 100; }
   .half, .colorboard {
     float: none;
     width: 100%;
@@ -725,6 +726,7 @@ input[type="file"] {
 }
 
 @media (max-width: 700px) {
+  #status { position: sticky; top: 10px; z-index: 100; }
   .colorboard .colorpad .color-pair {
     width: 31.33%;
     margin: 6px 3px;
@@ -744,6 +746,7 @@ input[type="file"] {
 }
 
 @media (max-width: 480px) {
+  #status { position: sticky; top: 10px; z-index: 100; }
   .colorboard .colorpad .color-pair {
     width: 48%;
     margin: 6px 3px;
@@ -755,6 +758,7 @@ input[type="file"] {
 
 @media (max-width: 340px) {
   body { max-width: 340px; }
+  #status { position: sticky; top: 10px; z-index: 100; }
   .colorboard .colorpad .color-pair {
     width: 100%;
     margin: 6px 0;

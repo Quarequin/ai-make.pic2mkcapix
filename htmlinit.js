@@ -382,7 +382,7 @@ BODY_HOME.insertAdjacentHTML('beforeend',`
 
     <div class="action-buttons">
         <button id="run" type="submit" disabled>Convert Image</button>
-        <button id="copy" type="button" disabled>Copy Output</button>
+        <button id="copy" type="button" disabled>Copy to Clipboard</button>
         <button id="download" type="button" disabled>Download Image</button>
     </div>
 </form>
