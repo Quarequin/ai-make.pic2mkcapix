@@ -296,25 +296,33 @@ async function modeSolid(data, w, h, rgbPalette, outData, onProgress, tmpTable, 
 	return { hexString: partialStr + "`", indexMap };
 }
 
-// ---- ORDERED BAYER (generic) ----
+// ---- ORDERED BAYER (enhanced with 1D error diffusion for smoother blending) ----
 async function modeBayer(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, bayerMatrix, matrixSize) {
 	const indexMap = new Uint8Array(w * h);
 	const cache = new Map();
 	const mask = matrixSize - 1;
 	const invSizeSq = 1 / (matrixSize * matrixSize);
-	const spread = 48;
+	const spread = 72; // Increased from 48 for stronger dithering blend
 	let partialStr = "img`\n";
 	for (let y = 0; y < h; y++) {
 		const rowBase = y * w;
 		const by = (y & mask) * matrixSize;
+		let carryR = 0, carryG = 0, carryB = 0;
+		const carryStrength = 0.6;
 		for (let x = 0; x < w; x++) {
 			const px = rowBase + x, srcIdx = px << 2;
 			if (data[srcIdx + 3] >= 128) {
 				const factor = (bayerMatrix[by + (x & mask)] * invSizeSq) - 0.5;
-				const r = clamp(data[srcIdx]	 + factor * spread);
-				const g = clamp(data[srcIdx + 1] + factor * spread);
-				const b = clamp(data[srcIdx + 2] + factor * spread);
+				const r = clamp(data[srcIdx]     + carryR + factor * spread);
+				const g = clamp(data[srcIdx + 1] + carryG + factor * spread);
+				const b = clamp(data[srcIdx + 2] + carryB + factor * spread);
 				indexMap[px] = cachedFindNearest(r, g, b, rgbPalette, cache);
+				const tc = rgbPalette[indexMap[px]];
+				carryR = (r - tc.r) * carryStrength;
+				carryG = (g - tc.g) * carryStrength;
+				carryB = (b - tc.b) * carryStrength;
+			} else {
+				carryR = carryG = carryB = 0;
 			}
 		}
 		partialStr += buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable);
@@ -325,25 +333,33 @@ async function modeBayer(data, w, h, rgbPalette, outData, onProgress, tmpTable, 
 	return { hexString: partialStr + "`", indexMap };
 }
 
-// ---- BLUE NOISE (generic) ----
+// ---- BLUE NOISE (enhanced with 1D error diffusion for smoother blending) ----
 async function modeBlueNoise(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, noiseMatrix, matrixSize) {
 	const indexMap = new Uint8Array(w * h);
 	const cache = new Map();
 	const mask = matrixSize - 1;
 	const inv255 = 1 / 255;
-	const spread = 52;
+	const spread = 80; // Increased from 52 for stronger dithering blend
 	let partialStr = "img`\n";
 	for (let y = 0; y < h; y++) {
 		const rowBase = y * w;
 		const ny = (y & mask) * matrixSize;
+		let carryR = 0, carryG = 0, carryB = 0;
+		const carryStrength = 0.6;
 		for (let x = 0; x < w; x++) {
 			const px = rowBase + x, srcIdx = px << 2;
 			if (data[srcIdx + 3] >= 128) {
 				const factor = (noiseMatrix[ny + (x & mask)] * inv255) - 0.5;
-				const r = clamp(data[srcIdx]	 + factor * spread);
-				const g = clamp(data[srcIdx + 1] + factor * spread);
-				const b = clamp(data[srcIdx + 2] + factor * spread);
+				const r = clamp(data[srcIdx]     + carryR + factor * spread);
+				const g = clamp(data[srcIdx + 1] + carryG + factor * spread);
+				const b = clamp(data[srcIdx + 2] + carryB + factor * spread);
 				indexMap[px] = cachedFindNearest(r, g, b, rgbPalette, cache);
+				const tc = rgbPalette[indexMap[px]];
+				carryR = (r - tc.r) * carryStrength;
+				carryG = (g - tc.g) * carryStrength;
+				carryB = (b - tc.b) * carryStrength;
+			} else {
+				carryR = carryG = carryB = 0;
 			}
 		}
 		partialStr += buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable);

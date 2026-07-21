@@ -2,24 +2,23 @@
 // Modular shader pipeline: each dithering mode is a standalone shader module.
 // Pre-computed Bayer & Blue Noise data embedded for zero runtime overhead.
 
-const VERTEX_SHADER = `#version 300 es
-in vec2 a_position;
-in vec2 a_texCoord;
-out vec2 v_texCoord;
+const VERTEX_SHADER = `
+attribute vec2 a_position;
+attribute vec2 a_texCoord;
+varying vec2 v_texCoord;
 void main() {
 	gl_Position = vec4(a_position, 0.0, 1.0);
 	v_texCoord = a_texCoord;
 }`;
 
 // Base fragment shader with palette matching
-const FRAG_BASE = `#version 300 es
+const FRAG_BASE = `
 precision highp float;
-in vec2 v_texCoord;
+varying vec2 v_texCoord;
 uniform sampler2D u_image;
 uniform vec3 u_palette[64];
 uniform int u_paletteCount;
 uniform vec2 u_resolution;
-out vec4 outColor;
 
 float colorDist(vec3 a, vec3 b) {
 	vec3 d = a - b;
@@ -42,11 +41,11 @@ int findNearest(vec3 col) {
 }
 
 vec3 samplePixel() {
-	return texture(u_image, v_texCoord).rgb;
+	return texture2D(u_image, v_texCoord).rgb;
 }
 
 float getAlpha() {
-	return texture(u_image, v_texCoord).a;
+	return texture2D(u_image, v_texCoord).a;
 }
 `;
 
@@ -55,12 +54,12 @@ const FRAG_SOLID = FRAG_BASE + `
 void main() {
 	float alpha = getAlpha();
 	if (alpha < 0.5) {
-		outColor = vec4(0.0, 0.0, 0.0, 0.0);
+		gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
 		return;
 	}
 	vec3 col = samplePixel();
 	int idx = findNearest(col);
-	outColor = vec4(u_palette[idx], 1.0);
+	gl_FragColor = vec4(u_palette[idx], 1.0);
 }`;
 
 // ---- BAYER MODE (pre-computed 256-entry table, size via uniform) ----
@@ -72,7 +71,7 @@ uniform float u_spread;
 void main() {
 	float alpha = getAlpha();
 	if (alpha < 0.5) {
-		outColor = vec4(0.0, 0.0, 0.0, 0.0);
+		gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
 		return;
 	}
 	vec2 px = v_texCoord * u_resolution;
@@ -82,26 +81,27 @@ void main() {
 	vec3 col = samplePixel() + factor * u_spread / 255.0;
 	col = clamp(col, 0.0, 1.0);
 	int idx = findNearest(col);
-	outColor = vec4(u_palette[idx], 1.0);
+	gl_FragColor = vec4(u_palette[idx], 1.0);
 }`;
 
 // ---- BLUE NOISE MODE ----
 const FRAG_BLUE = FRAG_BASE + `
 uniform sampler2D u_noise;
 uniform float u_spread;
+uniform vec2 u_noiseSize;
 
 void main() {
 	float alpha = getAlpha();
 	if (alpha < 0.5) {
-		outColor = vec4(0.0, 0.0, 0.0, 0.0);
+		gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
 		return;
 	}
-	vec2 noiseUV = fract(v_texCoord * u_resolution / vec2(textureSize(u_noise, 0)));
-	float factor = texture(u_noise, noiseUV).r - 0.5;
+	vec2 noiseUV = fract(v_texCoord * u_resolution / u_noiseSize);
+	float factor = texture2D(u_noise, noiseUV).r - 0.5;
 	vec3 col = samplePixel() + factor * u_spread / 255.0;
 	col = clamp(col, 0.0, 1.0);
 	int idx = findNearest(col);
-	outColor = vec4(u_palette[idx], 1.0);
+	gl_FragColor = vec4(u_palette[idx], 1.0);
 }`;
 
 // ---- Helper: compile shader ----
@@ -251,8 +251,8 @@ const BLUE32_U8 = new Uint8Array([
 // ============================================================
 export class GLEngine {
 	constructor(canvas) {
-		const gl = canvas.getContext("webgl2", { premultipliedAlpha: false, alpha: true });
-		if (!gl) throw new Error("WebGL 2.0 not supported");
+		const gl = canvas.getContext("webgl", { premultipliedAlpha: false, alpha: true });
+		if (!gl) throw new Error("WebGL not supported");
 		this.gl = gl;
 		this.canvas = canvas;
 		this._initQuad();
@@ -329,8 +329,8 @@ export class GLEngine {
 			this.textures["noise"] = tex;
 		}
 		gl.bindTexture(gl.TEXTURE_2D, tex);
-		// WebGL2: use R8 internal format with RED channel instead of deprecated LUMINANCE
-		gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, size, size, 0, gl.RED, gl.UNSIGNED_BYTE, noiseData);
+		// WebGL1: use LUMINANCE
+		gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, size, size, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, noiseData);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
@@ -391,14 +391,15 @@ export class GLEngine {
 			padded.set(bayer.data);
 			gl.uniform1fv(gl.getUniformLocation(program, "u_bayer"), padded);
 			gl.uniform1i(gl.getUniformLocation(program, "u_bayerSize"), bayer.size);
-			gl.uniform1f(gl.getUniformLocation(program, "u_spread"), 48.0);
+			gl.uniform1f(gl.getUniformLocation(program, "u_spread"), 72.0);
 		} else if (mode.startsWith("blue")) {
 			const noise = this._getBlueNoiseArray(mode);
 			this._uploadNoiseTexture(noise.data, noise.size);
 			gl.activeTexture(gl.TEXTURE1);
 			gl.bindTexture(gl.TEXTURE_2D, this.textures["noise"]);
 			gl.uniform1i(gl.getUniformLocation(program, "u_noise"), 1);
-			gl.uniform1f(gl.getUniformLocation(program, "u_spread"), 52.0);
+			gl.uniform1f(gl.getUniformLocation(program, "u_spread"), 80.0);
+			gl.uniform2f(gl.getUniformLocation(program, "u_noiseSize"), noise.size, noise.size);
 		}
 
 		// Render

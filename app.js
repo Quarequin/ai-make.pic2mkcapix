@@ -63,16 +63,16 @@ document
 	.addEventListener("click", toggleErrorLog);
 
 // ---- WEBGL 2.0 DETECTION ----
-function detectWebGL2() {
+function detectWebGL() {
 	try {
 		const c = document.createElement("canvas");
-		const gl = c.getContext("webgl2");
-		return !!(gl && gl instanceof WebGL2RenderingContext);
+		const gl = c.getContext("webgl");
+		return !!(gl && gl instanceof WebGLRenderingContext);
 	} catch (e) {
 		return false;
 	}
 }
-const webgl2Supported = detectWebGL2();
+const webglSupported = detectWebGL();
 
 // ---- ELEMENT REFS ----
 const fileInput = document.getElementById("file");
@@ -151,22 +151,22 @@ asciiEnableCheck.addEventListener("change", function () {
 
 // ---- ENGINE SELECT (CPU/GPU toggle + Floyd-Steinberg visibility) ----
 // Disable GPU option if WebGL2 is not supported
-if (!webgl2Supported) {
+if (!webglSupported) {
 	const gpuOpt = engineSelect.querySelector('option[value="gpu"]');
 	if (gpuOpt) {
 		gpuOpt.disabled = true;
 		gpuOpt.textContent += " (Not Supported)";
 	}
-	addToSessionLog("SYSTEM", "WebGL 2.0 not detected. GPU mode disabled.");
+	addToSessionLog("SYSTEM", "WebGL not detected. GPU mode disabled.");
 }
 
 engineSelect.addEventListener("change", function () {
 	// Guard: fallback to CPU if GPU selected but WebGL2 unavailable
-	if (this.value === "gpu" && !webgl2Supported) {
+	if (this.value === "gpu" && !webglSupported) {
 		displayErrorPopup(
-			"WebGL 2.0 Not Supported",
-			"Your browser or device does not support WebGL 2.0.",
-			"The GPU processing engine requires WebGL 2.0. Falling back to CPU mode.",
+			"WebGL Not Supported",
+			"Your browser or device does not support WebGL.",
+			"The GPU processing engine requires WebGL. Falling back to CPU mode.",
 		);
 		this.value = "cpu";
 		return;
