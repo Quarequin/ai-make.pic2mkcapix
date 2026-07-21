@@ -194,7 +194,7 @@ BODY_HOME.insertAdjacentHTML('beforeend',`
 				<label class="dropdown-label">Processing Engine:</label>
 				<select id="engine-select" class="custom-dropdown">
 					<option value="cpu" selected>CPU (JavaScript)</option>
-					<option value="gpu">GPU (WebGL 2.0)</option>
+					<option value="gpu">GPU (WebGL)</option>
 				</select>
 			</div>
 		</div>
