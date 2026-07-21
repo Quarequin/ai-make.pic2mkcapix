@@ -251,11 +251,12 @@ const BLUE32_U8 = new Uint8Array([
 // ============================================================
 export class GLEngine {
 
-	static checkWebGL() {
+	static checkWebGL(canvas) {
 		try {
-			const c = document.createElement("canvas");
+			const c = canvas || document.createElement("canvas");
 			//const gl = c.getContext("webgl");
-			return c.getContext('webgl', { premultipliedAlpha: false, alpha: true }) || c.getContext('experimental-webgl', { premultipliedAlpha: false, alpha: true });
+			const gl = c.getContext('webgl', { premultipliedAlpha: false, alpha: true }) || c.getContext('experimental-webgl', { premultipliedAlpha: false, alpha: true });
+			return gl || null;
 			// return !!(gl && gl instanceof WebGLRenderingContext);
 		} catch (e) {
 			return null;
@@ -263,7 +264,7 @@ export class GLEngine {
 	}
 
 	constructor(canvas) {
-		const gl = GLEngine.checkWebGL();
+		const gl = GLEngine.checkWebGL(canvas);
 		if (!gl) throw new Error("WebGL not supported");
 		this.gl = gl;
 		this.canvas = canvas;
