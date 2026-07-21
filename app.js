@@ -66,8 +66,9 @@ document
 function detectWebGL() {
 	try {
 		const c = document.createElement("canvas");
-		const gl = c.getContext("webgl");
-		return !!(gl && gl instanceof WebGLRenderingContext);
+		//const gl = c.getContext("webgl");
+		return !!(c.getContext('webgl') || c.getContext('experimental-webgl'));
+		//return !!(gl && gl instanceof WebGLRenderingContext);
 	} catch (e) {
 		return false;
 	}

@@ -446,7 +446,7 @@ BODY_HOME.insertAdjacentHTML('beforeend',`
 					Show Full Log ▼
 				</button>
 			</div>
-			<pre id="popup-err-stack">No trace details available.</pre>
+			<textarea id="popup-err-stack" readonly>No trace details available.</textarea>
 		</div>
 	</div>
 </div>
