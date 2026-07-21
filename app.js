@@ -896,7 +896,7 @@ async function progressiveTextOutput(fullString) {
 		if (i % 10 === 0 || i === totalLines - 1) {
 			textarea.value = resultString;
 			textarea.scrollTop = textarea.scrollHeight;
-			const pct = ((i + 1) * 100 / totalLines).toFixed(0);
+			const pct = ((i + 1) * 100 / totalLines).toFixed(4);
 			statusDiv.textContent = `Converting to text output... ${pct}%`;
 			runButton.textContent = `Converting... ${pct}%`;
 			await new Promise((r) => setTimeout(r, 0));
@@ -944,7 +944,7 @@ async function processAnimation(w, h) {
 	setButtonState("almost");
 
 	// Combine all frames
-	const combined = allResults.join("\n---FRAME---\n");
+	const combined = "[\n" + allResults.join(",\n") + "\n]";
 	await progressiveTextOutput(combined);
 }
 

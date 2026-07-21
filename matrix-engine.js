@@ -290,7 +290,7 @@ async function modeSolid(data, w, h, rgbPalette, outData, onProgress, tmpTable, 
 		}
 		partialStr += buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable);
 		if (y % progressInterval === 0 || y === h - 1) {
-			await onProgress(((y + 1) * 100 / h).toFixed(2));
+			await onProgress(((y + 1) * 100 / h).toFixed(4));
 		}
 	}
 	return { hexString: partialStr + "`", indexMap };
@@ -327,7 +327,7 @@ async function modeBayer(data, w, h, rgbPalette, outData, onProgress, tmpTable, 
 		}
 		partialStr += buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable);
 		if (y % progressInterval === 0 || y === h - 1) {
-			await onProgress(((y + 1) * 100 / h).toFixed(2));
+			await onProgress(((y + 1) * 100 / h).toFixed(4));
 		}
 	}
 	return { hexString: partialStr + "`", indexMap };
@@ -364,7 +364,7 @@ async function modeBlueNoise(data, w, h, rgbPalette, outData, onProgress, tmpTab
 		}
 		partialStr += buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable);
 		if (y % progressInterval === 0 || y === h - 1) {
-			await onProgress(((y + 1) * 100 / h).toFixed(2));
+			await onProgress(((y + 1) * 100 / h).toFixed(4));
 		}
 	}
 	return { hexString: partialStr + "`", indexMap };
@@ -414,7 +414,7 @@ async function modeFloydSteinberg(data, w, h, rgbPalette, outData, onProgress, t
 		}
 		partialStr += buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable);
 		if (y % progressInterval === 0 || y === h - 1) {
-			await onProgress(((y + 1) * 100 / h).toFixed(2));
+			await onProgress(((y + 1) * 100 / h).toFixed(4));
 		}
 	}
 	return { hexString: partialStr + "`", indexMap };
@@ -427,7 +427,7 @@ export async function runConversionPipeline({ data, w, h, mode, subPixelOption, 
 	const totalPx4 = data.length;
 	const colorCount = rgbPalette.length;
 	const tmpTable = colorCount > B32_TABLE.length ? B64_TABLE : (colorCount > HEX_TABLE.length ? B32_TABLE : HEX_TABLE);
-	const progressInterval = Math.max(5, (h / 20) | 0);
+	const progressInterval = Math.max(Math.E*0.1618, h / 24);
 
 	applySubpixel(data, totalPx4, subPixelOption, colorCount);
 
