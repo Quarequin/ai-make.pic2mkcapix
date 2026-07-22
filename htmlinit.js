@@ -3,7 +3,6 @@ const BODY_HOME = document.getElementById("body-home");
 BODY_HOME.insertAdjacentHTML('beforeend',`
 <!-- Loading Screen -->
 <div id="page-loader">
-	<h1>Convert Picture to MakecodeArcade or PixelArt</h1>
 	<br>
 	<div class="loader-content">
 		<div class="loader-spinner"></div>
