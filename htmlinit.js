@@ -3,13 +3,15 @@ const BODY_HOME = document.getElementById("body-home");
 BODY_HOME.insertAdjacentHTML('beforeend',`
 <!-- Loading Screen -->
 <div id="page-loader">
+	<h1>Convert Picture to MakecodeArcade or PixelArt</h1>
+	<br>
 	<div class="loader-content">
 		<div class="loader-spinner"></div>
 		<div class="loader-text">Loading Page...</div>
-		<div class="loader-sub">Preparing Pixel Art Engine</div>
+		<div class="loader-sub">Preparing Picture Converter Engine.</div>
 	</div>
 </div>
-<h2>Convert Picture to MakecodeArcade or PixelArt</h2>
+<h1>Convert Picture to MakecodeArcade or PixelArt</h1>
 <div id="info">
 	<p>
 		Upload your image to convert it into pixel art — with optional ASCII
@@ -27,7 +29,7 @@ BODY_HOME.insertAdjacentHTML('beforeend',`
 	type="file"
 	id="file"
 	accept="image/png,image/jpeg,image/jpg,image/jxl,image/bmp,image/gif,image/webp,image/apng,video/webm"
-/>
+>
 
 <form action="#" method="POST" id="parameters">
 	<div class="settings-group">
@@ -40,7 +42,7 @@ BODY_HOME.insertAdjacentHTML('beforeend',`
 						id="full-width"
 						checked
 						disabled
-					/>
+					>
 					Fix Sprite Width (160px)</label
 				>
 				<label class="full-row"
@@ -49,11 +51,11 @@ BODY_HOME.insertAdjacentHTML('beforeend',`
 						name="resize"
 						id="full-height"
 						disabled
-					/>
+					>
 					Fix Sprite Height (120px)</label
 				>
 				<label class="full-row"
-					><input type="radio" name="resize" id="scale" disabled />
+					><input type="radio" name="resize" id="scale" disabled >
 					Custom Scale Factor</label
 				>
 				<label style="padding-left: 20px">Scale Factor:</label>
@@ -65,7 +67,7 @@ BODY_HOME.insertAdjacentHTML('beforeend',`
 					min="0.1e-9"
 					max="8"
 					disabled
-				/>
+				>
 
 				<label
 					class="full-row"
@@ -75,7 +77,7 @@ BODY_HOME.insertAdjacentHTML('beforeend',`
 						padding-top: 12px;
 					"
 				>
-					<input type="checkbox" id="ratio" checked disabled /> Keep
+					<input type="checkbox" id="ratio" checked disabled > Keep
 					Original Aspect Ratio
 				</label>
 
@@ -86,7 +88,7 @@ BODY_HOME.insertAdjacentHTML('beforeend',`
 					value="160"
 					disabled
 					class="custom"
-				/>
+				>
 				<label>Output Height (px):</label>
 				<input
 					type="number"
@@ -94,7 +96,7 @@ BODY_HOME.insertAdjacentHTML('beforeend',`
 					value="120"
 					disabled
 					class="custom"
-				/>
+				>
 			</div>
 
 			<div class="dropdown-selection-group">
@@ -153,7 +155,7 @@ BODY_HOME.insertAdjacentHTML('beforeend',`
 			<div class="dropdown-selection-group" id="ascii-options-group">
 				<label class="dropdown-label">ASCII Art Output Options:</label>
 				<label class="full-row">
-					<input type="checkbox" id="ascii-enable" /> Enable ASCII
+					<input type="checkbox" id="ascii-enable" > Enable ASCII
 					Output (in Output Tab)
 				</label>
 				<div
@@ -189,7 +191,7 @@ BODY_HOME.insertAdjacentHTML('beforeend',`
 						min="10"
 						max="400"
 						class="custom"
-					/>
+					>
 				</div>
 			</div>
 
@@ -230,7 +232,7 @@ BODY_HOME.insertAdjacentHTML('beforeend',`
 					type="file"
 					id="palette-file-reader"
 					accept=".txt,.hex"
-				/>
+				>
 			</div>
 
 			<div class="palette-header-row">
@@ -261,123 +263,123 @@ BODY_HOME.insertAdjacentHTML('beforeend',`
 			<div class="colorpad" id="colorpad">
 				<div class="color-pair">
 					<label>Color 1</label
-					><input type="color" value="#ffffff" /><input
+					><input type="color" value="#ffffff" ><input
 						type="text"
 						class="colortext"
 						value="#ffffff"
-					/>
+					>
 				</div>
 				<div class="color-pair">
 					<label>Color 2</label
-					><input type="color" value="#ff2121" /><input
+					><input type="color" value="#ff2121" ><input
 						type="text"
 						class="colortext"
 						value="#ff2121"
-					/>
+					>
 				</div>
 				<div class="color-pair">
 					<label>Color 3</label
-					><input type="color" value="#ff93c4" /><input
+					><input type="color" value="#ff93c4" ><input
 						type="text"
 						class="colortext"
 						value="#ff93c4"
-					/>
+					>
 				</div>
 				<div class="color-pair">
 					<label>Color 4</label
-					><input type="color" value="#ff8135" /><input
+					><input type="color" value="#ff8135" ><input
 						type="text"
 						class="colortext"
 						value="#ff8135"
-					/>
+					>
 				</div>
 				<div class="color-pair">
 					<label>Color 5</label
-					><input type="color" value="#fff609" /><input
+					><input type="color" value="#fff609" ><input
 						type="text"
 						class="colortext"
 						value="#fff609"
-					/>
+					>
 				</div>
 				<div class="color-pair">
 					<label>Color 6</label
-					><input type="color" value="#249ca3" /><input
+					><input type="color" value="#249ca3" ><input
 						type="text"
 						class="colortext"
 						value="#249ca3"
-					/>
+					>
 				</div>
 				<div class="color-pair">
 					<label>Color 7</label
-					><input type="color" value="#78dc52" /><input
+					><input type="color" value="#78dc52" ><input
 						type="text"
 						class="colortext"
 						value="#78dc52"
-					/>
+					>
 				</div>
 				<div class="color-pair">
 					<label>Color 8</label
-					><input type="color" value="#003fad" /><input
+					><input type="color" value="#003fad" ><input
 						type="text"
 						class="colortext"
 						value="#003fad"
-					/>
+					>
 				</div>
 				<div class="color-pair">
 					<label>Color 9</label
-					><input type="color" value="#87f2ff" /><input
+					><input type="color" value="#87f2ff" ><input
 						type="text"
 						class="colortext"
 						value="#87f2ff"
-					/>
+					>
 				</div>
 				<div class="color-pair">
 					<label>Color 10</label
-					><input type="color" value="#8e2ec4" /><input
+					><input type="color" value="#8e2ec4" ><input
 						type="text"
 						class="colortext"
 						value="#8e2ec4"
-					/>
+					>
 				</div>
 				<div class="color-pair">
 					<label>Color 11</label
-					><input type="color" value="#a4839f" /><input
+					><input type="color" value="#a4839f" ><input
 						type="text"
 						class="colortext"
 						value="#a4839f"
-					/>
+					>
 				</div>
 				<div class="color-pair">
 					<label>Color 12</label
-					><input type="color" value="#5c406c" /><input
+					><input type="color" value="#5c406c" ><input
 						type="text"
 						class="colortext"
 						value="#5c406c"
-					/>
+					>
 				</div>
 				<div class="color-pair">
 					<label>Color 13</label
-					><input type="color" value="#e5cdc4" /><input
+					><input type="color" value="#e5cdc4" ><input
 						type="text"
 						class="colortext"
 						value="#e5cdc4"
-					/>
+					>
 				</div>
 				<div class="color-pair">
 					<label>Color 14</label
-					><input type="color" value="#91463d" /><input
+					><input type="color" value="#91463d" ><input
 						type="text"
 						class="colortext"
 						value="#91463d"
-					/>
+					>
 				</div>
 				<div class="color-pair">
 					<label>Color 15</label
-					><input type="color" value="#000000" /><input
+					><input type="color" value="#000000" ><input
 						type="text"
 						class="colortext"
 						value="#000000"
-					/>
+					>
 				</div>
 			</div>
 		</div>

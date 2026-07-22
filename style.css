@@ -25,7 +25,7 @@ body {
 	transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-input[disabled] { pointer-events: none; }
+input[disabled] { pointer-events: none; cursor: not-allowed; }
 
 /* ============================================================
 	 PAGE LOADER
@@ -37,19 +37,41 @@ input[disabled] { pointer-events: none; }
 	width: 100%;
 	height: 100%;
 	background: var(--bg-color);
-	z-index: 99999;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	flex-direction: column;
+	z-index: 512;
+	display: block;
 	transition: opacity 0.5s ease, visibility 0.5s ease;
 }
 
+#page-loader > .loader-content {
+	position: fixed;
+	top: calc(50% - 75px);
+	left: 0;
+	width: 100%;
+	height: 100px;
+}
+
+#page-loader > h1 {
+	margin: 10px;
+}
+
+@keyframes fadeOutOnPageLoaded {
+	from { opacity: 1; }
+	to { opacity: 0; }
+}
+
+@keyframes scaleUpOnPageLoaded {
+	to { transform: scale(192%, 192%); }
+}
+
 #page-loader.hidden {
+	animation: fadeOutOnPageLoaded 0.5s ease-out;
 	opacity: 0;
 	visibility: hidden;
 	pointer-events: none;
-	display: none;
+}
+
+#page-loader.hidden > .loader-content {
+	animation: scaleUpOnPageLoaded 0.5s ease-out;
 }
 
 .loader-content {
