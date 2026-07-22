@@ -25,6 +25,11 @@ body {
 	transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+body > h1 {
+	margin: 0px;
+	margin-bottom: 5px;
+}
+
 input[disabled] { pointer-events: none; cursor: not-allowed; }
 
 /* ============================================================
@@ -38,7 +43,6 @@ input[disabled] { pointer-events: none; cursor: not-allowed; }
 	height: 100%;
 	background: var(--bg-color);
 	z-index: 512;
-	display: block;
 	transition: opacity 0.5s ease, visibility 0.5s ease;
 }
 
@@ -46,6 +50,7 @@ input[disabled] { pointer-events: none; cursor: not-allowed; }
 	position: fixed;
 	top: calc(50% - 75px);
 	left: 0;
+	text-align: center;
 	width: 100%;
 	height: 100px;
 }
