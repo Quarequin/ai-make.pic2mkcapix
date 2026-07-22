@@ -427,7 +427,7 @@ export async function runConversionPipeline({ data, w, h, mode, subPixelOption, 
 	const totalPx4 = data.length;
 	const colorCount = rgbPalette.length;
 	const tmpTable = colorCount > B32_TABLE.length ? B64_TABLE : (colorCount > HEX_TABLE.length ? B32_TABLE : HEX_TABLE);
-	const progressInterval = Math.max(Math.E*0.1618, h / 24);
+	const progressInterval = Math.max(Math.E*0.1618, h / 16);
 
 	applySubpixel(data, totalPx4, subPixelOption, colorCount);
 

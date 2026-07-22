@@ -9,11 +9,14 @@ BODY_HOME.insertAdjacentHTML('beforeend',`
 		<div class="loader-sub">Preparing Pixel Art Engine</div>
 	</div>
 </div>
-<h2>Picture to PixelArt Converter</h2>
+<h2>Convert Picture to MakecodeArcade or PixelArt</h2>
 <div id="info">
 	<p>
 		Upload your image to convert it into pixel art — with optional ASCII
 		output and a fully customizable dynamic color palette.
+	</p>
+	<p>
+		note: 15 palette colors for makecode arcade compatibility.
 	</p>
 </div>
 

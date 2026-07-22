@@ -782,6 +782,7 @@ parametersForm.addEventListener("submit", async function (e) {
 
 		const w = parseInt(inputWidth.value) || 16;
 		const h = parseInt(inputHeight.value) || 16;
+		const progressInterval = Math.max(Math.E*0.1618, h / 20);
 		canvas.width = w;
 		canvas.height = h;
 
@@ -837,7 +838,7 @@ parametersForm.addEventListener("submit", async function (e) {
 		setButtonState("almost");
 
 		// Progressive textarea output: append line by line
-		await progressiveTextOutput(result.hexString);
+		await progressiveTextOutput(result.hexString, progressInterval);
 
 		lastIndexMap = result.indexMap;
 		lastW = w;
@@ -877,7 +878,7 @@ parametersForm.addEventListener("submit", async function (e) {
 });
 
 // Progressive output: show result line by line in textarea
-async function progressiveTextOutput(fullString) {
+async function progressiveTextOutput(fullString, progressInterval) {
 	isTextProcessing = true;
 	stopTextProcessingFlag = false;
 	const lines = fullString.split("\n");
@@ -893,7 +894,7 @@ async function progressiveTextOutput(fullString) {
 			break;
 		}
 		resultString += lines[i] + (i < totalLines - 1 ? "\n" : "");
-		if (i % 10 === 0 || i === totalLines - 1) {
+		if (i % (progressInterval | 0) === 0 || i === totalLines - 1) {
 			textarea.value = resultString;
 			textarea.scrollTop = textarea.scrollHeight;
 			const pct = ((i + 1) * 100 / totalLines).toFixed(4);
