@@ -27,7 +27,6 @@ BODY_HOME.insertAdjacentHTML('beforeend',`
 <input
 	type="file"
 	id="file"
-	accept="image/png,image/jpeg,image/jpg,image/jxl,image/bmp,image/gif,image/webp,image/apng,video/webm"
 >
 
 <form action="#" method="POST" id="parameters">

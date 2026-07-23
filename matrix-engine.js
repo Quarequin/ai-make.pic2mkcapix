@@ -313,7 +313,7 @@ async function modeBayer(data, w, h, rgbPalette, outData, onProgress, tmpTable, 
 			const px = rowBase + x, srcIdx = px << 2;
 			if (data[srcIdx + 3] >= 128) {
 				const factor = (bayerMatrix[by + (x & mask)] * invSizeSq) - 0.5;
-				const r = clamp(data[srcIdx]     + carryR + factor * spread);
+				const r = clamp(data[srcIdx]	 + carryR + factor * spread);
 				const g = clamp(data[srcIdx + 1] + carryG + factor * spread);
 				const b = clamp(data[srcIdx + 2] + carryB + factor * spread);
 				indexMap[px] = cachedFindNearest(r, g, b, rgbPalette, cache);
@@ -350,7 +350,7 @@ async function modeBlueNoise(data, w, h, rgbPalette, outData, onProgress, tmpTab
 			const px = rowBase + x, srcIdx = px << 2;
 			if (data[srcIdx + 3] >= 128) {
 				const factor = (noiseMatrix[ny + (x & mask)] * inv255) - 0.5;
-				const r = clamp(data[srcIdx]     + carryR + factor * spread);
+				const r = clamp(data[srcIdx]	 + carryR + factor * spread);
 				const g = clamp(data[srcIdx + 1] + carryG + factor * spread);
 				const b = clamp(data[srcIdx + 2] + carryB + factor * spread);
 				indexMap[px] = cachedFindNearest(r, g, b, rgbPalette, cache);
@@ -427,7 +427,7 @@ export async function runConversionPipeline({ data, w, h, mode, subPixelOption, 
 	const totalPx4 = data.length;
 	const colorCount = rgbPalette.length;
 	const tmpTable = colorCount > B32_TABLE.length ? B64_TABLE : (colorCount > HEX_TABLE.length ? B32_TABLE : HEX_TABLE);
-	const progressInterval = Math.max(Math.E*0.1618, h / 16);
+	const progressInterval = 1 + (Math.sqrt(h + w) * (h / w)) | 0;
 
 	applySubpixel(data, totalPx4, subPixelOption, colorCount);
 

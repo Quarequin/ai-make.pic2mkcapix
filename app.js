@@ -107,6 +107,12 @@ const colorpad = document.getElementById("colorpad");
 const paletteAddBtn = document.getElementById("palette-add-btn");
 const paletteRemoveBtn = document.getElementById("palette-remove-btn");
 const paletteCountLbl = document.getElementById("palette-count-label");
+const predefinedFileMediaType = {
+	"image/png":true,"image/jpeg":true,"image/jpg":true,
+	"image/jpe":true,"image/jxl":true ,"image/bmp":true,
+	"image/gif":true,"image/webp":true,"image/apng":true,
+	"vedio/webm":true
+};
 
 let originalImageSize = { width: 0, height: 0 };
 let originalMimeType = "image/png";
@@ -620,7 +626,13 @@ fileInput.addEventListener("change", async function () {
 	isAnimating = false;
 
 	const file = fileInput.files[0];
-	if (!file) return setButtonState("noImage");
+	if (!file || (file && !predefinedFileMediaType[file.type])) {
+		if (file) statusDiv.textContent = `Invalid: ${file.name} is not image file,
+		try selecting image file like .png,.jpg,.bmp,.gif,etc.`;
+		else statusDiv.textContent = `Invalid: No image file.
+		try selecting image file like .png,.jpg,.bmp,.gif,etc.`;
+		return setButtonState("noImage");
+	}
 
 	originalMimeType = file.type || "image/png";
 	const lastDotIdx = file.name.lastIndexOf(".");
@@ -782,7 +794,7 @@ parametersForm.addEventListener("submit", async function (e) {
 
 		const w = parseInt(inputWidth.value) || 16;
 		const h = parseInt(inputHeight.value) || 16;
-		const progressInterval = Math.max(Math.E*0.1618, h / 20);
+		const progressInterval = 1 + (Math.sqrt(h + w) * (h / w)) | 0;
 		canvas.width = w;
 		canvas.height = h;
 
