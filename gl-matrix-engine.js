@@ -25,19 +25,35 @@ float colorDist(vec3 a, vec3 b) {
 	return dot(d, d);
 }
 
-int findNearest(vec3 col) {
+// GLSL ES 1.00 only allows arrays to be indexed by a constant expression
+// or the index variable of an enclosing bounded for-loop. Returning an
+// int from a "findNearest" function and indexing u_palette[] with it
+// afterwards is "dynamic" indexing and gets rejected by strict
+// validators ("Index expression can only contain const or loop
+// symbols"). To stay within that rule, the nearest palette color is
+// selected and returned directly here, using only the loop counter i
+// (and the constant 1) to index u_palette[].
+//
+// This loop intentionally never uses break. Data-dependent early
+// exits inside a fragment-shader loop are a documented source of
+// per-fragment divergence bugs on some GPU compilers — fragments are
+// rasterized in 2x2 quads, and a driver that mishandles a break that
+// only some fragments in a quad take can corrupt output in an
+// alternating (checkerboard) pattern across the whole image. Instead,
+// every fragment runs the same fixed number of iterations and simply
+// masks out entries past u_paletteCount with an unreachable distance.
+vec3 findNearestColor(vec3 col) {
 	float minDist = 1e9;
-	int idx = 1;
+	vec3 nearest = u_palette[1];
 	for (int i = 1; i < 64; i++) {
-		if (i >= u_paletteCount) break;
-		float d = colorDist(col, u_palette[i]);
+		bool active = i < u_paletteCount;
+		float d = active ? colorDist(col, u_palette[i]) : 1e9;
 		if (d < minDist) {
 			minDist = d;
-			idx = i;
-			if (d < 0.0001) break;
+			nearest = u_palette[i];
 		}
 	}
-	return idx;
+	return nearest;
 }
 
 vec3 samplePixel() {
@@ -58,14 +74,16 @@ void main() {
 		return;
 	}
 	vec3 col = samplePixel();
-	int idx = findNearest(col);
-	gl_FragColor = vec4(u_palette[idx], 1.0);
+	vec3 nearest = findNearestColor(col);
+	gl_FragColor = vec4(nearest, 1.0);
 }`;
 
-// ---- BAYER MODE (pre-computed 256-entry table, size via uniform) ----
+// ---- BAYER MODE (pre-computed matrix, sampled from a texture so the
+// lookup coordinate can be a runtime-computed value — texture sampling
+// has no "constant/loop index only" restriction, unlike uniform arrays) ----
 const FRAG_BAYER = FRAG_BASE + `
-uniform float u_bayer[256];
-uniform int u_bayerSize;
+uniform sampler2D u_bayerTex;
+uniform float u_bayerSize;
 uniform float u_spread;
 
 void main() {
@@ -75,13 +93,12 @@ void main() {
 		return;
 	}
 	vec2 px = v_texCoord * u_resolution;
-	ivec2 ipx = ivec2(px);
-	int bidx = (ipx.y % u_bayerSize) * u_bayerSize + (ipx.x % u_bayerSize);
-	float factor = u_bayer[bidx] - 0.5;
+	vec2 bayerUV = mod(px, u_bayerSize) / u_bayerSize;
+	float factor = texture2D(u_bayerTex, bayerUV).r - 0.5;
 	vec3 col = samplePixel() + factor * u_spread / 255.0;
 	col = clamp(col, 0.0, 1.0);
-	int idx = findNearest(col);
-	gl_FragColor = vec4(u_palette[idx], 1.0);
+	vec3 nearest = findNearestColor(col);
+	gl_FragColor = vec4(nearest, 1.0);
 }`;
 
 // ---- BLUE NOISE MODE ----
@@ -100,8 +117,8 @@ void main() {
 	float factor = texture2D(u_noise, noiseUV).r - 0.5;
 	vec3 col = samplePixel() + factor * u_spread / 255.0;
 	col = clamp(col, 0.0, 1.0);
-	int idx = findNearest(col);
-	gl_FragColor = vec4(u_palette[idx], 1.0);
+	vec3 nearest = findNearestColor(col);
+	gl_FragColor = vec4(nearest, 1.0);
 }`;
 
 // ---- Helper: compile shader ----
@@ -178,6 +195,19 @@ const BAYER16_F32 = new Float32Array([
 	255, 127, 223, 95, 247, 119, 215, 87, 253, 125, 221, 93, 245, 117, 213, 85
 ].map(v => v / 256.0));
 
+// Uint8 texture versions of the same matrices — the Bayer lookup is now
+// done via texture2D() sampling (like the Blue Noise mode already did)
+// instead of indexing a uniform float array by a runtime-computed
+// index, which GLSL ES 1.00 rejects (see FRAG_BASE comment above).
+function _floatMatrixToU8(floatArr) {
+	const out = new Uint8Array(floatArr.length);
+	for (let i = 0; i < floatArr.length; i++) out[i] = Math.round(floatArr[i] * 255);
+	return out;
+}
+const BAYER4_U8 = _floatMatrixToU8(BAYER4_F32);
+const BAYER8_U8 = _floatMatrixToU8(BAYER8_F32);
+const BAYER16_U8 = _floatMatrixToU8(BAYER16_F32);
+
 // ============================================================
 // PRE-COMPUTED BLUE NOISE MATRICES
 // ============================================================
@@ -249,25 +279,44 @@ const BLUE32_U8 = new Uint8Array([
 // ============================================================
 // GL ENGINE CLASS (modular)
 // ============================================================
-export class GLEngine {
+/*export*/ class GLEngine {
 
 	static checkWebGL(canvas) {
 		try {
 			const c = canvas || document.createElement("canvas");
-			//const gl = c.getContext("webgl");
-			const gl = c.getContext('webgl', { premultipliedAlpha: false, alpha: true }) || c.getContext('experimental-webgl', { premultipliedAlpha: false, alpha: true });
+			const opts = { premultipliedAlpha: false, alpha: true, antialias: false };
+			// Prefer a WebGL2 context where available (more consistent
+			// feature set / no functional downside here), falling back to
+			// WebGL1 for older browsers. Note: the shaders themselves must
+			// still avoid GLSL ES 1.00's "array index must be a constant or
+			// loop symbol" restriction regardless of context version — see
+			// the comment above findNearestColor() in FRAG_BASE — since
+			// several drivers enforce it identically under both webgl and
+			// webgl2 contexts.
+			const gl = c.getContext('webgl2', opts)
+				|| c.getContext('webgl', opts)
+				|| c.getContext('experimental-webgl', opts);
 			return gl || null;
-			// return !!(gl && gl instanceof WebGLRenderingContext);
 		} catch (e) {
 			return null;
 		}
 	}
 
 	constructor(canvas) {
-		const gl = GLEngine.checkWebGL(canvas);
+		// IMPORTANT: do NOT request a WebGL context on the canvas passed in
+		// from app.js — that element is already bound to a "2d" context
+		// there (canvas.getContext("2d", ...)) for the preview/output
+		// display. A <canvas> element can only ever be bound to ONE
+		// context type (2d XOR webgl) for its entire lifetime; once it's
+		// "2d", every later getContext('webgl'/'webgl2'/...) call on that
+		// same element returns null forever — which is what was throwing
+		// "WebGL not supported" even on GPUs/browsers that support it.
+		// GLEngine owns its own private offscreen canvas instead.
+		this._sourceCanvas = canvas; // kept only for reference, unused for GL
+		this.canvas = document.createElement("canvas");
+		const gl = GLEngine.checkWebGL(this.canvas);
 		if (!gl) throw new Error("WebGL not supported");
 		this.gl = gl;
-		this.canvas = canvas;
 		this._initQuad();
 		this.programs = {};
 		this.textures = {};
@@ -334,16 +383,19 @@ export class GLEngine {
 		return tex;
 	}
 
-	_uploadNoiseTexture(noiseData, size) {
+	// Uploads a single-channel (LUMINANCE) lookup texture, cached per key.
+	// Used for both the Blue Noise texture and the Bayer matrix texture —
+	// sampling a texture with a runtime-computed UV has no GLSL ES 1.00
+	// "constant/loop index only" restriction, unlike a uniform array.
+	_uploadLuminanceTexture(key, texData, size) {
 		const gl = this.gl;
-		let tex = this.textures["noise"];
+		let tex = this.textures[key];
 		if (!tex) {
 			tex = gl.createTexture();
-			this.textures["noise"] = tex;
+			this.textures[key] = tex;
 		}
 		gl.bindTexture(gl.TEXTURE_2D, tex);
-		// WebGL1: use LUMINANCE
-		gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, size, size, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, noiseData);
+		gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, size, size, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, texData);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
@@ -353,10 +405,10 @@ export class GLEngine {
 
 	_getBayerArray(mode) {
 		switch (mode) {
-			case "bayer4": return { data: BAYER4_F32, size: 4 };
-			case "bayer8": return { data: BAYER8_F32, size: 8 };
-			case "bayer16": return { data: BAYER16_F32, size: 16 };
-			default: return { data: BAYER4_F32, size: 4 };
+			case "bayer4": return { data: BAYER4_U8, size: 4 };
+			case "bayer8": return { data: BAYER8_U8, size: 8 };
+			case "bayer16": return { data: BAYER16_U8, size: 16 };
+			default: return { data: BAYER4_U8, size: 4 };
 		}
 	}
 
@@ -374,6 +426,17 @@ export class GLEngine {
 	// ============================================================
 	render({ data, w, h, mode, rgbPalette, outImgData }) {
 		const gl = this.gl;
+
+		// The GL framebuffer's backing store size follows canvas.width/
+		// height, which drives both the viewport and what readPixels can
+		// read back. Resize the internal canvas to match this render's
+		// output dimensions (resizing a canvas implicitly clears/reallocates
+		// its backing store, which is what we want here).
+		if (this.canvas.width !== w || this.canvas.height !== h) {
+			this.canvas.width = w;
+			this.canvas.height = h;
+		}
+
 		const program = this._getProgram(mode);
 		this._useProgram(program);
 
@@ -399,15 +462,15 @@ export class GLEngine {
 		// Mode-specific uniforms
 		if (mode.startsWith("bayer")) {
 			const bayer = this._getBayerArray(mode);
-			// Pad to 256 entries for the shader uniform array
-			const padded = new Float32Array(256);
-			padded.set(bayer.data);
-			gl.uniform1fv(gl.getUniformLocation(program, "u_bayer"), padded);
-			gl.uniform1i(gl.getUniformLocation(program, "u_bayerSize"), bayer.size);
+			this._uploadLuminanceTexture("bayer", bayer.data, bayer.size);
+			gl.activeTexture(gl.TEXTURE1);
+			gl.bindTexture(gl.TEXTURE_2D, this.textures["bayer"]);
+			gl.uniform1i(gl.getUniformLocation(program, "u_bayerTex"), 1);
+			gl.uniform1f(gl.getUniformLocation(program, "u_bayerSize"), bayer.size);
 			gl.uniform1f(gl.getUniformLocation(program, "u_spread"), 72.0);
 		} else if (mode.startsWith("blue")) {
 			const noise = this._getBlueNoiseArray(mode);
-			this._uploadNoiseTexture(noise.data, noise.size);
+			this._uploadLuminanceTexture("noise", noise.data, noise.size);
 			gl.activeTexture(gl.TEXTURE1);
 			gl.bindTexture(gl.TEXTURE_2D, this.textures["noise"]);
 			gl.uniform1i(gl.getUniformLocation(program, "u_noise"), 1);
@@ -471,7 +534,7 @@ export class GLEngine {
 	}
 }
 
-export async function runGLPipeline({ canvas, data, w, h, mode, rgbPalette, outImgData, onProgress }) {
+/*export*/ async function runGLPipeline({ canvas, data, w, h, mode, rgbPalette, outImgData, onProgress }) {
 	const engine = new GLEngine(canvas);
 	// GPU renders all at once — simulate progress
 	onProgress("25.00");

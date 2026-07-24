@@ -1,9 +1,9 @@
 // app.js — Main Application Controller
 // Modular imports: CPU engine, GPU engine, animation processor
 
-import { runConversionPipeline, exportAscii } from "./matrix-engine.js";
-import { runGLPipeline } from "./gl-matrix-engine.js";
-import { decodeAnimation, isAnimatedFormat } from "./anim-proc.js";
+//import { runConversionPipeline, exportAscii } from "./matrix-engine.js";
+//import { runGLPipeline } from "./gl-matrix-engine.js";
+//import { decodeAnimation, isAnimatedFormat } from "./anim-proc.js";
 
 const htmlLog = [];
 let lastIndexMap = null;
@@ -66,9 +66,15 @@ document
 function detectWebGL() {
 	try {
 		const c = document.createElement("canvas");
-		//const gl = c.getContext("webgl");
-		return !!(c.getContext('webgl') || c.getContext('experimental-webgl'));
-		//return !!(gl && gl instanceof WebGLRenderingContext);
+		// gl-matrix-engine.js relies on dynamic (non-constant) array
+		// indexing in its shaders, which requires a WebGL2 context — a
+		// plain WebGL1 context can fail to compile those shaders on some
+		// drivers. Match GLEngine.checkWebGL()'s context preference here.
+		return !!(
+			c.getContext('webgl2') ||
+			c.getContext('webgl') ||
+			c.getContext('experimental-webgl')
+		);
 	} catch (e) {
 		return false;
 	}

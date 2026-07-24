@@ -353,7 +353,7 @@ class JXLDecoder {
 // ============================================================
 // MAIN EXPORT: detect and decode animation
 // ============================================================
-export async function decodeAnimation(buffer, mimeType) {
+/*export*/ async function decodeAnimation(buffer, mimeType) {
 	const type = ANIM_MIME_TYPES[mimeType];
 	switch (type) {
 		case "gif":
@@ -369,6 +369,6 @@ export async function decodeAnimation(buffer, mimeType) {
 	}
 }
 
-export function isAnimatedFormat(mimeType) {
+/*export*/ function isAnimatedFormat(mimeType) {
 	return !!ANIM_MIME_TYPES[mimeType];
 }

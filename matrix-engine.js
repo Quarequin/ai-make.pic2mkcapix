@@ -119,7 +119,7 @@ const BLUE32 = new Uint8Array([
 // ============================================================
 // COLOR MATCHING ENGINE
 // ============================================================
-export function findNearestColor(r, g, b, rgbPalette) {
+/*export*/ function findNearestColor(r, g, b, rgbPalette) {
 	let minDist = Infinity, nearestIndex = 1;
 	const len = rgbPalette.length;
 	for (let i = 1; i < len; i++) {
@@ -156,7 +156,7 @@ const ASCII_CHARSETS = {
 	dense:	" .'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$".split('')
 };
 
-export function exportAscii(indexMap, w, h, rgbPalette, charsetKey, asciiCols) {
+/*export*/ function exportAscii(indexMap, w, h, rgbPalette, charsetKey, asciiCols) {
 	const chars = ASCII_CHARSETS[charsetKey] || ASCII_CHARSETS.standard;
 	const maxLevels = chars.length - 1;
 	const colCount = Math.min(asciiCols, w);
@@ -423,7 +423,7 @@ async function modeFloydSteinberg(data, w, h, rgbPalette, outData, onProgress, t
 // ============================================================
 // MAIN PIPELINE ROUTER
 // ============================================================
-export async function runConversionPipeline({ data, w, h, mode, subPixelOption, rgbPalette, outImgData, onProgress }) {
+/*export*/ async function runConversionPipeline({ data, w, h, mode, subPixelOption, rgbPalette, outImgData, onProgress }) {
 	const totalPx4 = data.length;
 	const colorCount = rgbPalette.length;
 	const tmpTable = colorCount > B32_TABLE.length ? B64_TABLE : (colorCount > HEX_TABLE.length ? B32_TABLE : HEX_TABLE);

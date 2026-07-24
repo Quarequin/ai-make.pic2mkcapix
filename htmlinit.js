@@ -193,9 +193,9 @@ BODY_HOME.insertAdjacentHTML('beforeend',`
 				</div>
 			</div>
 
-			<div class="dropdown-selection-group" state="disabled">
-				<label class="dropdown-label" state="disabled">Processing Engine:</label>
-				<select id="engine-select" class="custom-dropdown" state="disabled" disabled>
+			<div class="dropdown-selection-group">
+				<label class="dropdown-label">Processing Engine:</label>
+				<select id="engine-select" class="custom-dropdown">
 					<option value="cpu" selected>CPU (JavaScript)</option>
 					<option value="gpu">GPU (WebGL)</option>
 				</select>
