@@ -11,50 +11,13 @@ void main() {
 	v_texCoord = a_texCoord;
 }`;
 
-// Base fragment shader with palette matching
+// Base fragment shader: image sampling only. Palette quantization is
+// intentionally NOT done here — see the render()/JS-side comment for why.
 const FRAG_BASE = `
 precision highp float;
 varying vec2 v_texCoord;
 uniform sampler2D u_image;
-uniform vec3 u_palette[64];
-uniform int u_paletteCount;
 uniform vec2 u_resolution;
-
-float colorDist(vec3 a, vec3 b) {
-	vec3 d = a - b;
-	return dot(d, d);
-}
-
-// GLSL ES 1.00 only allows arrays to be indexed by a constant expression
-// or the index variable of an enclosing bounded for-loop. Returning an
-// int from a "findNearest" function and indexing u_palette[] with it
-// afterwards is "dynamic" indexing and gets rejected by strict
-// validators ("Index expression can only contain const or loop
-// symbols"). To stay within that rule, the nearest palette color is
-// selected and returned directly here, using only the loop counter i
-// (and the constant 1) to index u_palette[].
-//
-// This loop intentionally never uses break. Data-dependent early
-// exits inside a fragment-shader loop are a documented source of
-// per-fragment divergence bugs on some GPU compilers — fragments are
-// rasterized in 2x2 quads, and a driver that mishandles a break that
-// only some fragments in a quad take can corrupt output in an
-// alternating (checkerboard) pattern across the whole image. Instead,
-// every fragment runs the same fixed number of iterations and simply
-// masks out entries past u_paletteCount with an unreachable distance.
-vec3 findNearestColor(vec3 col) {
-	float minDist = 1e9;
-	vec3 nearest = u_palette[1];
-	for (int i = 1; i < 64; i++) {
-		bool active = i < u_paletteCount;
-		float d = active ? colorDist(col, u_palette[i]) : 1e9;
-		if (d < minDist) {
-			minDist = d;
-			nearest = u_palette[i];
-		}
-	}
-	return nearest;
-}
 
 vec3 samplePixel() {
 	return texture2D(u_image, v_texCoord).rgb;
@@ -65,7 +28,7 @@ float getAlpha() {
 }
 `;
 
-// ---- SOLID MODE ----
+// ---- SOLID MODE (no dithering — straight resample) ----
 const FRAG_SOLID = FRAG_BASE + `
 void main() {
 	float alpha = getAlpha();
@@ -73,14 +36,13 @@ void main() {
 		gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
 		return;
 	}
-	vec3 col = samplePixel();
-	vec3 nearest = findNearestColor(col);
-	gl_FragColor = vec4(nearest, 1.0);
+	gl_FragColor = vec4(samplePixel(), 1.0);
 }`;
 
-// ---- BAYER MODE (pre-computed matrix, sampled from a texture so the
-// lookup coordinate can be a runtime-computed value — texture sampling
-// has no "constant/loop index only" restriction, unlike uniform arrays) ----
+// ---- BAYER MODE — outputs the resampled color plus the ordered-dither
+// offset, NOT yet snapped to the palette. Snapping (with the row-wise
+// error-carry that keeps this from looking like a raw tiled matrix — see
+// the note in render()) happens afterward in JS. ----
 const FRAG_BAYER = FRAG_BASE + `
 uniform sampler2D u_bayerTex;
 uniform float u_bayerSize;
@@ -97,11 +59,10 @@ void main() {
 	float factor = texture2D(u_bayerTex, bayerUV).r - 0.5;
 	vec3 col = samplePixel() + factor * u_spread / 255.0;
 	col = clamp(col, 0.0, 1.0);
-	vec3 nearest = findNearestColor(col);
-	gl_FragColor = vec4(nearest, 1.0);
+	gl_FragColor = vec4(col, 1.0);
 }`;
 
-// ---- BLUE NOISE MODE ----
+// ---- BLUE NOISE MODE — same idea as Bayer above ----
 const FRAG_BLUE = FRAG_BASE + `
 uniform sampler2D u_noise;
 uniform float u_spread;
@@ -117,8 +78,7 @@ void main() {
 	float factor = texture2D(u_noise, noiseUV).r - 0.5;
 	vec3 col = samplePixel() + factor * u_spread / 255.0;
 	col = clamp(col, 0.0, 1.0);
-	vec3 nearest = findNearestColor(col);
-	gl_FragColor = vec4(nearest, 1.0);
+	gl_FragColor = vec4(col, 1.0);
 }`;
 
 // ---- Helper: compile shader ----
@@ -287,12 +247,7 @@ const BLUE32_U8 = new Uint8Array([
 			const opts = { premultipliedAlpha: false, alpha: true, antialias: false };
 			// Prefer a WebGL2 context where available (more consistent
 			// feature set / no functional downside here), falling back to
-			// WebGL1 for older browsers. Note: the shaders themselves must
-			// still avoid GLSL ES 1.00's "array index must be a constant or
-			// loop symbol" restriction regardless of context version — see
-			// the comment above findNearestColor() in FRAG_BASE — since
-			// several drivers enforce it identically under both webgl and
-			// webgl2 contexts.
+			// WebGL1 for older browsers.
 			const gl = c.getContext('webgl2', opts)
 				|| c.getContext('webgl', opts)
 				|| c.getContext('experimental-webgl', opts);
@@ -374,6 +329,10 @@ const BLUE32_U8 = new Uint8Array([
 			tex = gl.createTexture();
 			this.textures["image"] = tex;
 		}
+		// Always bind on TEXTURE0 ourselves — never rely on whatever unit
+		// happened to be active when this is called (see the comment on
+		// _uploadLuminanceTexture below for why that's not safe here).
+		gl.activeTexture(gl.TEXTURE0);
 		gl.bindTexture(gl.TEXTURE_2D, tex);
 		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, imageData);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
@@ -383,17 +342,34 @@ const BLUE32_U8 = new Uint8Array([
 		return tex;
 	}
 
-	// Uploads a single-channel (LUMINANCE) lookup texture, cached per key.
-	// Used for both the Blue Noise texture and the Bayer matrix texture —
-	// sampling a texture with a runtime-computed UV has no GLSL ES 1.00
-	// "constant/loop index only" restriction, unlike a uniform array.
-	_uploadLuminanceTexture(key, texData, size) {
+	// Uploads a single-channel (LUMINANCE) lookup texture, cached per key,
+	// onto the given texture unit (gl.TEXTURE0, gl.TEXTURE1, ...). Used for
+	// both the Blue Noise texture and the Bayer matrix texture — sampling a
+	// texture with a runtime-computed UV has no GLSL ES 1.00 "constant/loop
+	// index only" restriction, unlike a uniform array.
+	//
+	// IMPORTANT: this must set gl.activeTexture(unit) itself, rather than
+	// trusting the caller to have already set the active unit — WebGL's
+	// active-texture-unit is global GL state that persists across calls.
+	// This used to only gl.bindTexture() without activating a unit first,
+	// which silently bound onto whatever unit a *previous, unrelated* call
+	// had left active (in practice: TEXTURE0, right after the real image
+	// texture had just been bound there for u_image) — overwriting the
+	// image texture's binding on unit 0 with the Bayer/noise texture
+	// before the subsequent `gl.activeTexture(gl.TEXTURE1)` call even ran.
+	// The shader's u_image sampler (still pointed at unit 0) ended up
+	// reading the tiny 4x4/8x8 dither texture instead of the actual photo
+	// — producing output with the dither pattern but none of the source
+	// image's content, which is exactly the "checkerboard unrelated to the
+	// source image" bug.
+	_uploadLuminanceTexture(key, texData, size, unit) {
 		const gl = this.gl;
 		let tex = this.textures[key];
 		if (!tex) {
 			tex = gl.createTexture();
 			this.textures[key] = tex;
 		}
+		gl.activeTexture(unit);
 		gl.bindTexture(gl.TEXTURE_2D, tex);
 		gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, size, size, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, texData);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
@@ -440,39 +416,30 @@ const BLUE32_U8 = new Uint8Array([
 		const program = this._getProgram(mode);
 		this._useProgram(program);
 
-		// Upload image
+		// Upload image (binds itself onto TEXTURE0)
 		this._uploadImageTexture(data, w, h);
-		gl.activeTexture(gl.TEXTURE0);
-		gl.bindTexture(gl.TEXTURE_2D, this.textures["image"]);
 		gl.uniform1i(gl.getUniformLocation(program, "u_image"), 0);
 
-		// Set palette
-		const palLoc = gl.getUniformLocation(program, "u_palette");
-		const palFlat = new Float32Array(64 * 3);
-		for (let i = 0; i < rgbPalette.length && i < 64; i++) {
-			const c = rgbPalette[i];
-			palFlat[i * 3] = c.r / 255;
-			palFlat[i * 3 + 1] = c.g / 255;
-			palFlat[i * 3 + 2] = c.b / 255;
-		}
-		gl.uniform3fv(palLoc, palFlat);
-		gl.uniform1i(gl.getUniformLocation(program, "u_paletteCount"), rgbPalette.length);
 		gl.uniform2f(gl.getUniformLocation(program, "u_resolution"), w, h);
 
-		// Mode-specific uniforms
+		// Mode-specific uniforms.
+		//
+		// spread=72/80 matches matrix-engine.js (CPU) exactly. The GPU
+		// shaders only add the ordered-dither offset and hand back a raw
+		// (unquantized) color — palette snapping, including the row-wise
+		// error-carry that keeps the result from looking like the raw
+		// Bayer/Blue-Noise matrix tiled across the image, happens below in
+		// JS after readback (see the loop after gl.readPixels), using the
+		// same algorithm as modeBayer()/modeBlueNoise() in matrix-engine.js.
 		if (mode.startsWith("bayer")) {
 			const bayer = this._getBayerArray(mode);
-			this._uploadLuminanceTexture("bayer", bayer.data, bayer.size);
-			gl.activeTexture(gl.TEXTURE1);
-			gl.bindTexture(gl.TEXTURE_2D, this.textures["bayer"]);
+			this._uploadLuminanceTexture("bayer", bayer.data, bayer.size, gl.TEXTURE1);
 			gl.uniform1i(gl.getUniformLocation(program, "u_bayerTex"), 1);
 			gl.uniform1f(gl.getUniformLocation(program, "u_bayerSize"), bayer.size);
 			gl.uniform1f(gl.getUniformLocation(program, "u_spread"), 72.0);
 		} else if (mode.startsWith("blue")) {
 			const noise = this._getBlueNoiseArray(mode);
-			this._uploadLuminanceTexture("noise", noise.data, noise.size);
-			gl.activeTexture(gl.TEXTURE1);
-			gl.bindTexture(gl.TEXTURE_2D, this.textures["noise"]);
+			this._uploadLuminanceTexture("noise", noise.data, noise.size, gl.TEXTURE1);
 			gl.uniform1i(gl.getUniformLocation(program, "u_noise"), 1);
 			gl.uniform1f(gl.getUniformLocation(program, "u_spread"), 80.0);
 			gl.uniform2f(gl.getUniformLocation(program, "u_noiseSize"), noise.size, noise.size);
@@ -488,31 +455,48 @@ const BLUE32_U8 = new Uint8Array([
 		const outData = outImgData.data;
 		gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, outData);
 
-		// Build index map and string from output
+		// Build index map and string from output.
+		//
+		// The GPU shaders above only resample the image (plus, for
+		// bayer/blue, add the ordered-dither offset) — they do NOT snap to
+		// the palette. That happens here, in JS, so bayer/blue modes can
+		// use the same row-wise error-carry as modeBayer()/modeBlueNoise()
+		// in matrix-engine.js: 60% of each pixel's leftover quantization
+		// error is carried into the next pixel along the row. That carry
+		// is what keeps the result from looking like the raw Bayer/Blue-
+		// Noise matrix tiled across the image — it's an inherently serial,
+		// row-wise dependency (pixel x needs pixel x-1's residual) that a
+		// parallel fragment shader has no way to express, so it has to
+		// happen after readback rather than inside the shader.
 		const indexMap = new Uint8Array(w * h);
 		const colorCount = rgbPalette.length;
 		const HEX_TABLE = "0123456789ABCDEF";
 		const B32_TABLE = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 		const B64_TABLE = "0123456789ABCDEFGHJKMNPQRSTVWXYZabcdefghjkmnpqrstvwxyz#&@%$?^:+/";
 		const tmpTable = colorCount > B32_TABLE.length ? B64_TABLE : (colorCount > HEX_TABLE.length ? B32_TABLE : HEX_TABLE);
+		const useCarry = mode.startsWith("bayer") || mode.startsWith("blue");
+		const carryStrength = 0.6;
+		const clampByte = (v) => v < 0 ? 0 : (v > 255 ? 255 : v);
 
 		let partialStr = "img`\n";
 		for (let y = 0; y < h; y++) {
 			let rowStr = "";
 			const rowBase = y * w;
+			let carryR = 0, carryG = 0, carryB = 0;
 			for (let x = 0; x < w; x++) {
 				const px = rowBase + x;
 				const off = px << 2;
-				const r = outData[off];
-				const g = outData[off + 1];
-				const b = outData[off + 2];
 				const a = outData[off + 3];
 				if (a < 128) {
 					indexMap[px] = 0;
 					rowStr += tmpTable[0];
 					outData[off] = 0; outData[off + 1] = 0;
 					outData[off + 2] = 0; outData[off + 3] = 0;
+					carryR = carryG = carryB = 0;
 				} else {
+					const r = useCarry ? clampByte(outData[off] + carryR) : outData[off];
+					const g = useCarry ? clampByte(outData[off + 1] + carryG) : outData[off + 1];
+					const b = useCarry ? clampByte(outData[off + 2] + carryB) : outData[off + 2];
 					let minDist = Infinity, nearest = 1;
 					for (let i = 1; i < colorCount; i++) {
 						const p = rgbPalette[i];
@@ -523,6 +507,11 @@ const BLUE32_U8 = new Uint8Array([
 					indexMap[px] = nearest;
 					rowStr += tmpTable[nearest];
 					const c = rgbPalette[nearest];
+					if (useCarry) {
+						carryR = (r - c.r) * carryStrength;
+						carryG = (g - c.g) * carryStrength;
+						carryB = (b - c.b) * carryStrength;
+					}
 					outData[off] = c.r; outData[off + 1] = c.g;
 					outData[off + 2] = c.b; outData[off + 3] = c.a !== undefined ? c.a : 255;
 				}
