@@ -1,3 +1,3 @@
-visit at [here](https://quarequin.github.io/pic2mkcarcade-converter)
+visit at [here](https://quarequin.github.io/convert-picture-2-makecodearcade-or-pixelart)
 
-download offline at [here](https://github.com/Quarequin/pic2mkcarcade-converter/releases/latest/download/pic2mkcapix.html)
+download offline at [here](https://github.com/Quarequin/convert-picture-2-makecodearcade-or-pixelart/releases/latest/download/pic2mkcapix.html)
