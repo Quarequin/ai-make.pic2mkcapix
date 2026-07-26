@@ -1,6 +1,12 @@
-const __HTMLHOME_SANI = new Sanitizer({
-  elements: ["div", "span", "p", "hr", "strong", "button", "script", "input", "label", "form", "textarea", "img", "canvas", "select", "option", "optgroup"],
-});
+/*const __HTMLHOME_SANI = new Sanitizer({
+	elements: [
+		"div", "span", "p", "hr",
+		"strong", "button", "script",
+		"input", "label", "form",
+		"textarea", "img", "canvas",
+		"select", "option", "optgroup"
+	],
+});*/
 
 const __HTMLHOME_PAGE = `
 <!-- Loading Screen -->
@@ -23,16 +29,14 @@ const __HTMLHOME_PAGE = `
 
 <div id="status">System Status: Awaiting Image Upload Asset...</div>
 
+<label>Select Target Source Image:</label>
+<input
+	type="file"
+	id="image-file-reader"
+>
 <form action="#" method="POST" id="parameters">
 	<div class="settings-group">
 		<div class="half">
-			<div class="size-settings-grid">
-				<label>Select Target Source Image:</label>
-				<input
-					type="file"
-					id="file"
-				>
-			</div>
 			<div class="size-settings-grid">
 				<label class="full-row"
 					><input
@@ -106,11 +110,9 @@ const __HTMLHOME_PAGE = `
 						>Render Options (Dithering Method):</label
 					>
 					<select id="mode-select" class="custom-dropdown">
-						<optgroup label="No Dithering">
-							<option value="solid" selected>
-								Solid Palette Color (No Dithering)
-							</option>
-						</optgroup>
+						<option value="solid" selected>
+							Solid (No Dithering)
+						</option>
 						<optgroup label="Ordered Dithering (Bayer)">
 							<option value="bayer4">Bayer Matrix 4×4</option>
 							<option value="bayer8">Bayer Matrix 8×8</option>
@@ -466,6 +468,7 @@ const __HTMLHOME_PAGE = `
 </div>
 `;
 
-const __HTMLHOME_INIT = document.querySelector("div[id=html-home]");
+const __HTMLHOME_INIT = document.querySelector("div#html-home");
 
-__HTMLHOME_INIT.setHTML(__HTMLHOME_PAGE, { sanitizer: __HTMLHOME_SANI });
+__HTMLHOME_INIT.setHTMLUnsafe(__HTMLHOME_PAGE);
+//__HTMLHOME_INIT.setHTML(__HTMLHOME_PAGE, { sanitizer: __HTMLHOME_SANI });

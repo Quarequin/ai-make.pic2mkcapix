@@ -84,7 +84,7 @@ function detectWebGL() {
 const webglSupported = detectWebGL();
 
 // ---- ELEMENT REFS ----
-const fileInput = document.getElementById("file");
+const imageFileInput = document.getElementById("image-file-reader");
 const paletteFileInput = document.getElementById("palette-file-reader");
 const predefinedPaletteSelect = document.getElementById(
 	"predefined-palette-select",
@@ -622,7 +622,7 @@ function parseCurrentPalette() {
 // ============================================================
 //  IMAGE / ANIMATION LOAD
 // ============================================================
-fileInput.addEventListener("change", async function () {
+imageFileInput.addEventListener("change", async function () {
 	textarea.value = "";
 	asciiOutputTA.value = "";
 	lastIndexMap = null;
@@ -630,7 +630,7 @@ fileInput.addEventListener("change", async function () {
 	currentFrameIndex = 0;
 	isAnimating = false;
 
-	const file = fileInput.files[0];
+	const file = imageFileInput.files[0];
 	if (!file || (file && !predefinedFileMediaType[file.type])) {
 		if (file) statusDiv.textContent = `Invalid: ${file.name} is not image file,
 		try selecting image file like .png,.jpg,.bmp,.gif,etc.`;
