@@ -1,14 +1,4 @@
-/*const __HTMLHOME_SANI = new Sanitizer({
-	elements: [
-		"div", "span", "p", "hr",
-		"strong", "button", "script",
-		"input", "label", "form",
-		"textarea", "img", "canvas",
-		"select", "option", "optgroup"
-	],
-});*/
-
-const __HTMLHOME_PAGE = `
+document.querySelector("body").insertAdjacentHTML('beforeend',`
 <!-- Loading Screen -->
 <div id="page-loader">
 	<div class="loader-content">
@@ -466,9 +456,4 @@ const __HTMLHOME_PAGE = `
 		</div>
 	</div>
 </div>
-`;
-
-const __HTMLHOME_INIT = document.querySelector("div#html-home");
-
-__HTMLHOME_INIT.setHTMLUnsafe(__HTMLHOME_PAGE);
-//__HTMLHOME_INIT.setHTML(__HTMLHOME_PAGE, { sanitizer: __HTMLHOME_SANI });
+`);
