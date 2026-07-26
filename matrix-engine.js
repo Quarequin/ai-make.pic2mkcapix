@@ -302,7 +302,6 @@ async function modeBayer(data, w, h, rgbPalette, outData, onProgress, tmpTable, 
 	const cache = new Map();
 	const mask = matrixSize - 1;
 	const invSizeSq = 1 / (matrixSize * matrixSize);
-	const spread = 72; // Increased from 48 for stronger dithering blend
 	let partialStr = "img`\n";
 	for (let y = 0; y < h; y++) {
 		const rowBase = y * w;
@@ -313,6 +312,8 @@ async function modeBayer(data, w, h, rgbPalette, outData, onProgress, tmpTable, 
 			const px = rowBase + x, srcIdx = px << 2;
 			if (data[srcIdx + 3] >= 128) {
 				const factor = (bayerMatrix[by + (x & mask)] * invSizeSq) - 0.5;
+				const lum = 0.2126 * data[srcIdx] + 0.7152 * data[srcIdx + 1] + 0.0722 * data[srcIdx + 2];
+				const spread = 20 + ((255 - lum) / 255) * 60;
 				const r = clamp(data[srcIdx]	 + carryR + factor * spread);
 				const g = clamp(data[srcIdx + 1] + carryG + factor * spread);
 				const b = clamp(data[srcIdx + 2] + carryB + factor * spread);
@@ -339,7 +340,6 @@ async function modeBlueNoise(data, w, h, rgbPalette, outData, onProgress, tmpTab
 	const cache = new Map();
 	const mask = matrixSize - 1;
 	const inv255 = 1 / 255;
-	const spread = 80; // Increased from 52 for stronger dithering blend
 	let partialStr = "img`\n";
 	for (let y = 0; y < h; y++) {
 		const rowBase = y * w;
@@ -350,6 +350,8 @@ async function modeBlueNoise(data, w, h, rgbPalette, outData, onProgress, tmpTab
 			const px = rowBase + x, srcIdx = px << 2;
 			if (data[srcIdx + 3] >= 128) {
 				const factor = (noiseMatrix[ny + (x & mask)] * inv255) - 0.5;
+				const lum = 0.2126 * data[srcIdx] + 0.7152 * data[srcIdx + 1] + 0.0722 * data[srcIdx + 2];
+				const spread = 20 + ((255 - lum) / 255) * 60;
 				const r = clamp(data[srcIdx]	 + carryR + factor * spread);
 				const g = clamp(data[srcIdx + 1] + carryG + factor * spread);
 				const b = clamp(data[srcIdx + 2] + carryB + factor * spread);

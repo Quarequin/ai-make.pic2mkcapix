@@ -6,6 +6,7 @@
 //import { decodeAnimation, isAnimatedFormat } from "./anim-proc.js";
 
 const htmlLog = [];
+let loaded = false;
 let lastIndexMap = null;
 let lastW = 0,
 	lastH = 0;
@@ -51,6 +52,7 @@ function toggleErrorLog() {
 }
 
 function closeErrorPopup() {
+	if (!loaded) window.location.reload();
 	document.getElementById("notification-popup-overlay").style.display =
 		"none";
 }
@@ -186,15 +188,12 @@ engineSelect.addEventListener("change", function () {
 	}
 
 	const isGPU = this.value === "gpu";
-	const errorOptgroup = document.getElementById("optgroup-error");
-	const errorOption = modeSelect.querySelector('option[value="error"]');
+	const errorDefusionOptgroup = document.getElementById("error-defusion-option");
 	if (isGPU) {
 		if (modeSelect.value === "error") modeSelect.value = "solid";
-		if (errorOptgroup) errorOptgroup.style.display = "none";
-		if (errorOption) errorOption.style.display = "none";
+		if (errorDefusionOptgroup) errorDefusionOptgroup.style.display = "none";
 	} else {
-		if (errorOptgroup) errorOptgroup.style.display = "block";
-		if (errorOption) errorOption.style.display = "block";
+		if (errorDefusionOptgroup) errorDefusionOptgroup.style.display = "block";
 	}
 	addToSessionLog(
 		"ENGINE",
@@ -902,25 +901,28 @@ async function progressiveTextOutput(fullString, progressInterval) {
 	const lines = fullString.split("\n");
 	const totalLines = lines.length;
 	textarea.value = "";
+	let curstring = "";
 	let resultString = "";
 	for (let i = 0; i < totalLines; i++) {
 		if (stopTextProcessingFlag) {
 			if (i < totalLines) {
 				resultString += lines.slice(i).join("\n");
 			}
-			textarea.value = resultString;
+			curstring = resultString;
 			break;
 		}
 		resultString += lines[i] + (i < totalLines - 1 ? "\n" : "");
 		if (i % (progressInterval | 0) === 0 || i === totalLines - 1) {
-			textarea.value = resultString;
-			textarea.scrollTop = textarea.scrollHeight;
+			curstring = resultString;
+			//textarea.scrollTop = textarea.scrollHeight;
 			const pct = ((i + 1) * 100 / totalLines).toFixed(4);
 			statusDiv.textContent = `Converting to text output... ${pct}%`;
+			textarea.value = statusDiv.textContent;
 			runButton.textContent = `Converting... ${pct}%`;
 			await new Promise((r) => setTimeout(r, 0));
 		}
 	}
+	textarea.value = curstring;
 	isTextProcessing = false;
 	copyButton.textContent = "Copy to Clipboard";
 }
@@ -1033,6 +1035,7 @@ downloadButton.addEventListener("click", function (e) {
 
 // ---- HIDE LOADING SCREEN WHEN DOM READY ----
 window.addEventListener("DOMContentLoaded", () => {
+	loaded = true;
 	const loader = document.getElementById("page-loader");
 	if (loader) {
 		// Give a small delay so the user sees the loader on fast connections
