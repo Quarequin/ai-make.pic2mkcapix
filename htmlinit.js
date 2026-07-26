@@ -1,12 +1,16 @@
-document.querySelector("body").insertAdjacentHTML('beforeend',`
+const BODY_HOME = document.getElementById("body-home");
+
+BODY_HOME.insertAdjacentHTML('beforeend',`
 <!-- Loading Screen -->
 <div id="page-loader">
+	<br>
 	<div class="loader-content">
 		<div class="loader-spinner"></div>
 		<div class="loader-text">Loading Page...</div>
 		<div class="loader-sub">Preparing Picture Converter Engine.</div>
 	</div>
 </div>
+<h1>Convert Picture to MakecodeArcade or PixelArt</h1>
 <div id="info">
 	<p>
 		Upload your image to convert it into pixel art — with optional ASCII
@@ -24,6 +28,7 @@ document.querySelector("body").insertAdjacentHTML('beforeend',`
 	type="file"
 	id="file"
 >
+
 <form action="#" method="POST" id="parameters">
 	<div class="settings-group">
 		<div class="half">
@@ -47,8 +52,6 @@ document.querySelector("body").insertAdjacentHTML('beforeend',`
 					>
 					Fix Sprite Height (120px)</label
 				>
-
-				<hr>
 				<label class="full-row"
 					><input type="radio" name="resize" id="scale" disabled >
 					Custom Scale Factor</label
@@ -63,6 +66,7 @@ document.querySelector("body").insertAdjacentHTML('beforeend',`
 					max="8"
 					disabled
 				>
+
 				<label
 					class="full-row"
 					style="
@@ -75,7 +79,6 @@ document.querySelector("body").insertAdjacentHTML('beforeend',`
 					Original Aspect Ratio
 				</label>
 
-				<hr>
 				<label>Output Width (px):</label>
 				<input
 					type="number"
@@ -95,113 +98,107 @@ document.querySelector("body").insertAdjacentHTML('beforeend',`
 			</div>
 
 			<div class="dropdown-selection-group">
-				<div>
-					<label for="mode-select" class="dropdown-label"
-						>Render Options (Dithering Method):</label
-					>
-					<select id="mode-select" class="custom-dropdown">
+				<label for="mode-select" class="dropdown-label"
+					>Render Options (Dithering Method):</label
+				>
+				<select id="mode-select" class="custom-dropdown">
+					<optgroup label="Ordered Dithering (Bayer)">
 						<option value="solid" selected>
-							Solid (No Dithering)
+							Solid Palette Color (No Dithering)
 						</option>
-						<optgroup label="Ordered Dithering (Bayer)">
-							<option value="bayer4">Bayer Matrix 4×4</option>
-							<option value="bayer8">Bayer Matrix 8×8</option>
-							<option value="bayer16">Bayer Matrix 16×16</option>
-						</optgroup>
-						<optgroup label="Blue Noise Dithering">
-							<option value="blue8">Blue Noise 8×8</option>
-							<option value="blue16">Blue Noise 16×16</option>
-							<option value="blue32">Blue Noise 32×32</option>
-							<!--<option value="blue64">Blue Noise 64×64</option>-->
-						</optgroup>
-						<optgroup label="Error Diffusion" id="error-defusion-option">
-							<option value="error">
-								Floyd-Steinberg Error Diffusion
-							</option>
-						</optgroup>
-					</select>
-				</div>
-				<hr>
-				<div>
-					<label for="subpixel-select" class="dropdown-label"
-						>Sub-pixel &amp; Edge Enhancement Options:</label
+						<option value="bayer4">Bayer Matrix 4×4</option>
+						<option value="bayer8">Bayer Matrix 8×8</option>
+						<option value="bayer16">Bayer Matrix 16×16</option>
+					</optgroup>
+					<optgroup label="Blue Noise Dithering">
+						<option value="blue8">Blue Noise 8×8</option>
+						<option value="blue16">Blue Noise 16×16</option>
+						<option value="blue32">Blue Noise 32×32</option>
+						<!--<option value="blue64">Blue Noise 64×64</option>-->
+					</optgroup>
+					<optgroup label="Error Diffusion" id="optgroup-error">
+						<option value="error">
+							Floyd-Steinberg Error Diffusion
+						</option>
+					</optgroup>
+				</select>
+			</div>
+
+			<div class="dropdown-selection-group">
+				<label for="subpixel-select" class="dropdown-label"
+					>Sub-pixel &amp; Edge Enhancement Options:</label
+				>
+				<select id="subpixel-select" class="custom-dropdown">
+					<option value="none" selected>
+						None (Standard Pixel Mapping)
+					</option>
+					<option value="solidIndexing">
+						Solid Indexing — Linear Encludien (Crisp, No Blur)
+					</option>
+					<option value="hinted">
+						Grid-Aligned Pixel Hinting (Font-Style)
+					</option>
+					<option value="antialias">
+						Anti-Aliasing Smoothing Blend
+					</option>
+					<option value="nearestNeighbor">
+						Nearest Neighbor Sharp Alignment
+					</option>
+					<option value="smallAntiAliasing">
+						Small-scale Anti-Aliasing (Micro Blur)
+					</option>
+				</select>
+			</div>
+
+			<div class="dropdown-selection-group" id="ascii-options-group">
+				<label class="dropdown-label">ASCII Art Output Options:</label>
+				<label class="full-row">
+					<input type="checkbox" id="ascii-enable" > Enable ASCII
+					Output (in Output Tab)
+				</label>
+				<div
+					id="ascii-sub-options"
+					style="display: none; margin-top: 8px"
+				>
+					<label
+						for="ascii-charset-select"
+						class="dropdown-label"
+						style="margin-top: 8px"
+						>ASCII Character Set:</label
 					>
-					<select id="subpixel-select" class="custom-dropdown">
-						<optgroup label="Aliasing">
-							<option value="none" selected>
-								None (Standard Pixel Mapping)
-							</option>
-							<option value="solidIndexing">
-								Solid Indexing — Linear Encludien (Crisp, No Blur)
-							</option>
-							<option value="nearestNeighbor">
-								Nearest Neighbor Sharp Alignment
-							</option>
-						</optgroup>
-						<optgroup label="Anti Aliasing">
-							<option value="hinted">
-								Grid-Aligned Pixel Hinting (Font-Style)
-							</option>
-							<option value="antialias">
-								Anti-Aliasing Smoothing Blend
-							</option>
-							<option value="smallAntiAliasing">
-								Small-scale Anti-Aliasing (Micro Blur)
-							</option>
-						</optgroup>
+					<select id="ascii-charset-select" class="custom-dropdown">
+						<option value="standard">
+							Standard (█▓▒░ + Symbols)
+						</option>
+						<option value="block">Block Only (█ ▓ ▒ ░ ·)</option>
+						<option value="alphanumeric">
+							Alphanumeric (A-Z, 0-9)
+						</option>
+						<option value="minimal">Minimal ( .:-=+*#%@)</option>
+						<option value="dense">
+							Dense (Full Printable ASCII)
+						</option>
 					</select>
-				</div>
-				<hr>
-				<div id="ascii-options-group">
-					<label class="dropdown-label">ASCII Art Output Options:</label>
-					<label class="full-row">
-						<input type="checkbox" id="ascii-enable" > Enable ASCII
-						Output (in Output Tab)
-					</label>
-					<div
-						id="ascii-sub-options"
-						style="display: none; margin-top: 8px"
+					<label for="ascii-width-input" style="margin-top: 8px"
+						>ASCII Columns:</label
 					>
-						<label
-							for="ascii-charset-select"
-							class="dropdown-label"
-							style="margin-top: 8px"
-							>ASCII Character Set:</label
-						>
-						<select id="ascii-charset-select" class="custom-dropdown">
-							<option value="standard">
-								Standard (█▓▒░ + Symbols)
-							</option>
-							<option value="block">Block Only (█ ▓ ▒ ░ ·)</option>
-							<option value="alphanumeric">
-								Alphanumeric (A-Z, 0-9)
-							</option>
-							<option value="minimal">Minimal ( .:-=+*#%@)</option>
-							<option value="dense">
-								Dense (Full Printable ASCII)
-							</option>
-						</select>
-						<label for="ascii-width-input" style="margin-top: 8px"
-							>ASCII Columns:</label
-						>
-						<input
-							type="number"
-							id="ascii-width-input"
-							value="80"
-							min="10"
-							max="400"
-							class="custom"
-						>
-					</div>
+					<input
+						type="number"
+						id="ascii-width-input"
+						value="80"
+						min="10"
+						max="400"
+						class="custom"
+					>
 				</div>
-				<hr>
-				<div>
-					<label class="dropdown-label">Processing Engine:</label>
-					<select id="engine-select" class="custom-dropdown">
-						<option value="cpu" selected>CPU (JavaScript)</option>
-						<option value="gpu">GPU (WebGL)</option>
-					</select>
-				</div>
+			</div>
+
+			<div class="dropdown-selection-group">
+				<label class="dropdown-label">Processing Engine:</label>
+				<select id="engine-select" class="custom-dropdown">
+					<option value="cpu" selected>CPU (JavaScript)</option>
+					<option value="gpu">GPU (WebGL)</option>
+				</select>
 			</div>
 		</div>
 

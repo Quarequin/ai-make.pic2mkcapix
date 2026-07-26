@@ -188,15 +188,15 @@ engineSelect.addEventListener("change", function () {
 	}
 
 	const isGPU = this.value === "gpu";
-	const errorDefusionOptgroup = document.getElementById("error-defusion-option");
-	const errorDefusionOption = document.querySelector("optgroup#error-defusion-option > *");
+	const errorOptgroup = document.getElementById("optgroup-error");
+	const errorOption = modeSelect.querySelector('option[value="error"]');
 	if (isGPU) {
 		if (modeSelect.value === "error") modeSelect.value = "solid";
-		if (errorDefusionOptgroup) errorDefusionOptgroup.style.display = "none";
-		if (errorDefusionOption) errorDefusionOption.style.display = "none";
+		if (errorOptgroup) errorOptgroup.style.display = "none";
+		if (errorOption) errorOption.style.display = "none";
 	} else {
-		if (errorDefusionOption) errorDefusionOption.style.display = "block";
-		if (errorDefusionOptgroup) errorDefusionOptgroup.style.display = "block";
+		if (errorOptgroup) errorOptgroup.style.display = "block";
+		if (errorOption) errorOption.style.display = "block";
 	}
 	addToSessionLog(
 		"ENGINE",
@@ -676,6 +676,8 @@ fileInput.addEventListener("change", async function () {
 					"ANIM",
 					`Loaded animated ${originalMimeType} with ${animFrames.length} frames.`,
 				);
+				canvas.width = inputWidth.value;
+				canvas.height = inputHeight.value;
 			}
 		} catch (animErr) {
 			displayErrorPopup(
@@ -723,6 +725,8 @@ fileInput.addEventListener("change", async function () {
 			setButtonState("imageLoaded");
 			updateCalculatedDimensions();
 			statusDiv.textContent = `Ready: ${file.name} Loaded Successfully.`;
+			canvas.width = inputWidth.value;
+			canvas.height = inputHeight.value;
 		};
 		img.src = e.target.result;
 	};
@@ -753,8 +757,6 @@ function updateCalculatedDimensions() {
 	}
 	document.getElementById("canvas-res").textContent =
 		`Size: ${inputWidth.value} x ${inputHeight.value} px`;
-	canvas.width = inputWidth.value;
-	canvas.height = inputHeight.value;
 }
 
 document.querySelectorAll('input[name="resize"], #factor').forEach((el) => {

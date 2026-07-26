@@ -46,8 +46,7 @@ void main() {
 const FRAG_BAYER = FRAG_BASE + `
 uniform sampler2D u_bayerTex;
 uniform float u_bayerSize;
-uniform float u_minSpread;
-uniform float u_maxSpread;
+uniform float u_spread;
 
 void main() {
 	float alpha = getAlpha();
@@ -58,10 +57,7 @@ void main() {
 	vec2 px = v_texCoord * u_resolution;
 	vec2 bayerUV = mod(px, u_bayerSize) / u_bayerSize;
 	float factor = texture2D(u_bayerTex, bayerUV).r - 0.5;
-	vec3 col = samplePixel();
-	float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
-	float spread = mix(u_minSpread, u_maxSpread, 1.0 - lum);
-	col = col + factor * spread / 255.0;
+	vec3 col = samplePixel() + factor * u_spread / 255.0;
 	col = clamp(col, 0.0, 1.0);
 	gl_FragColor = vec4(col, 1.0);
 }`;
@@ -69,8 +65,7 @@ void main() {
 // ---- BLUE NOISE MODE — same idea as Bayer above ----
 const FRAG_BLUE = FRAG_BASE + `
 uniform sampler2D u_noise;
-uniform float u_minSpread;
-uniform float u_maxSpread;
+uniform float u_spread;
 uniform vec2 u_noiseSize;
 
 void main() {
@@ -81,10 +76,7 @@ void main() {
 	}
 	vec2 noiseUV = fract(v_texCoord * u_resolution / u_noiseSize);
 	float factor = texture2D(u_noise, noiseUV).r - 0.5;
-	vec3 col = samplePixel();
-	float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
-	float spread = mix(u_minSpread, u_maxSpread, 1.0 - lum);
-	col = col + factor * spread / 255.0;
+	vec3 col = samplePixel() + factor * u_spread / 255.0;
 	col = clamp(col, 0.0, 1.0);
 	gl_FragColor = vec4(col, 1.0);
 }`;
@@ -408,7 +400,7 @@ const BLUE32_U8 = new Uint8Array([
 	// ============================================================
 	// MAIN RENDER METHOD
 	// ============================================================
-	async render({ data, w, h, mode, rgbPalette, outImgData, onProgress }) {
+	render({ data, w, h, mode, rgbPalette, outImgData }) {
 		const gl = this.gl;
 
 		// The GL framebuffer's backing store size follows canvas.width/
@@ -432,7 +424,7 @@ const BLUE32_U8 = new Uint8Array([
 
 		// Mode-specific uniforms.
 		//
-		// minSpread=20, maxSpread=80: dynamic per-pixel based on luminance (light=low, dark=high). The GPU
+		// spread=72/80 matches matrix-engine.js (CPU) exactly. The GPU
 		// shaders only add the ordered-dither offset and hand back a raw
 		// (unquantized) color — palette snapping, including the row-wise
 		// error-carry that keeps the result from looking like the raw
@@ -444,14 +436,12 @@ const BLUE32_U8 = new Uint8Array([
 			this._uploadLuminanceTexture("bayer", bayer.data, bayer.size, gl.TEXTURE1);
 			gl.uniform1i(gl.getUniformLocation(program, "u_bayerTex"), 1);
 			gl.uniform1f(gl.getUniformLocation(program, "u_bayerSize"), bayer.size);
-			gl.uniform1f(gl.getUniformLocation(program, "u_minSpread"), 20.0);
-			gl.uniform1f(gl.getUniformLocation(program, "u_maxSpread"), 80.0);
+			gl.uniform1f(gl.getUniformLocation(program, "u_spread"), 72.0);
 		} else if (mode.startsWith("blue")) {
 			const noise = this._getBlueNoiseArray(mode);
 			this._uploadLuminanceTexture("noise", noise.data, noise.size, gl.TEXTURE1);
 			gl.uniform1i(gl.getUniformLocation(program, "u_noise"), 1);
-			gl.uniform1f(gl.getUniformLocation(program, "u_minSpread"), 20.0);
-			gl.uniform1f(gl.getUniformLocation(program, "u_maxSpread"), 80.0);
+			gl.uniform1f(gl.getUniformLocation(program, "u_spread"), 80.0);
 			gl.uniform2f(gl.getUniformLocation(program, "u_noiseSize"), noise.size, noise.size);
 		}
 
@@ -487,7 +477,6 @@ const BLUE32_U8 = new Uint8Array([
 		const useCarry = mode.startsWith("bayer") || mode.startsWith("blue");
 		const carryStrength = 0.6;
 		const clampByte = (v) => v < 0 ? 0 : (v > 255 ? 255 : v);
-		const progressInterval = 1 + (Math.sqrt(h + w) * (h / w)) | 0;
 
 		let partialStr = "img`\n";
 		for (let y = 0; y < h; y++) {
@@ -528,11 +517,6 @@ const BLUE32_U8 = new Uint8Array([
 				}
 			}
 			partialStr += rowStr + "\n";
-			if (onProgress) {
-				if (y % progressInterval === 0 || y === h - 1) {
-					await onProgress(((y + 1) * 100 / h).toFixed(4));
-				}
-			}
 		}
 
 		return { hexString: partialStr + "`", indexMap };
@@ -542,11 +526,11 @@ const BLUE32_U8 = new Uint8Array([
 /*export*/ async function runGLPipeline({ canvas, data, w, h, mode, rgbPalette, outImgData, onProgress }) {
 	const engine = new GLEngine(canvas);
 	// GPU renders all at once — simulate progress
-	//onProgress(`${(25).toFixed(4)}`);
-	//await new Promise(r => requestAnimationFrame(r));
-	//onProgress(`${(50).toFixed(4)}`);
-	//await new Promise(r => requestAnimationFrame(r));
-	const result = await engine.render({ data, w, h, mode, rgbPalette, outImgData, onProgress });
-	//onProgress(`${(100).toFixed(4)}`);
+	onProgress("25.0000");
+	await new Promise(r => requestAnimationFrame(r));
+	onProgress("50.0000");
+	await new Promise(r => requestAnimationFrame(r));
+	const result = engine.render({ data, w, h, mode, rgbPalette, outImgData });
+	onProgress("100.0000");
 	return result;
 }

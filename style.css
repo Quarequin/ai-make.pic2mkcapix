@@ -26,16 +26,6 @@ body {
 
 body > h1 { position: relative; z-index: 720; }
 
-body hr {
-	border-style: solid;
-	border-color: #7aa2f7;
-}
-
-div hr {
-	border-style: dashed;
-	border-color: #383e5a;
-}
-
 input[disabled] { pointer-events: none; cursor: not-allowed; }
 
 /* ============================================================
@@ -513,7 +503,7 @@ input[type="file"] {
 	width: 100%;
 	height: 100%;
 	background: rgba(0, 0, 0, 0.6);
-	z-index: 10000;
+	z-index: 1024;
 	backdrop-filter: blur(2px);
 	text-align: center;
 	padding-top: 50px;
