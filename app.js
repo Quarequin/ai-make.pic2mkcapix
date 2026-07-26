@@ -84,7 +84,7 @@ function detectWebGL() {
 const webglSupported = detectWebGL();
 
 // ---- ELEMENT REFS ----
-const imageFileInput = document.getElementById("image-file-reader");
+const fileInput = document.getElementById("file");
 const paletteFileInput = document.getElementById("palette-file-reader");
 const predefinedPaletteSelect = document.getElementById(
 	"predefined-palette-select",
@@ -625,7 +625,7 @@ function parseCurrentPalette() {
 // ============================================================
 //  IMAGE / ANIMATION LOAD
 // ============================================================
-imageFileInput.addEventListener("change", async function () {
+fileInput.addEventListener("change", async function () {
 	textarea.value = "";
 	asciiOutputTA.value = "";
 	lastIndexMap = null;
@@ -633,7 +633,7 @@ imageFileInput.addEventListener("change", async function () {
 	currentFrameIndex = 0;
 	isAnimating = false;
 
-	const file = imageFileInput.files[0];
+	const file = fileInput.files[0];
 	if (!file || (file && !predefinedFileMediaType[file.type])) {
 		if (file) statusDiv.textContent = `Invalid: ${file.name} is not image file,
 		try selecting image file like .png,.jpg,.bmp,.gif,etc.`;
@@ -753,6 +753,8 @@ function updateCalculatedDimensions() {
 	}
 	document.getElementById("canvas-res").textContent =
 		`Size: ${inputWidth.value} x ${inputHeight.value} px`;
+	canvas.width = inputWidth.value;
+	canvas.height = inputHeight.value;
 }
 
 document.querySelectorAll('input[name="resize"], #factor').forEach((el) => {

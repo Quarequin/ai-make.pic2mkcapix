@@ -408,7 +408,7 @@ const BLUE32_U8 = new Uint8Array([
 	// ============================================================
 	// MAIN RENDER METHOD
 	// ============================================================
-	render({ data, w, h, mode, rgbPalette, outImgData }) {
+	async render({ data, w, h, mode, rgbPalette, outImgData, onProgress }) {
 		const gl = this.gl;
 
 		// The GL framebuffer's backing store size follows canvas.width/
@@ -487,6 +487,7 @@ const BLUE32_U8 = new Uint8Array([
 		const useCarry = mode.startsWith("bayer") || mode.startsWith("blue");
 		const carryStrength = 0.6;
 		const clampByte = (v) => v < 0 ? 0 : (v > 255 ? 255 : v);
+		const progressInterval = 1 + (Math.sqrt(h + w) * (h / w)) | 0;
 
 		let partialStr = "img`\n";
 		for (let y = 0; y < h; y++) {
@@ -527,6 +528,11 @@ const BLUE32_U8 = new Uint8Array([
 				}
 			}
 			partialStr += rowStr + "\n";
+			if (onProgress) {
+				if (y % progressInterval === 0 || y === h - 1) {
+					await onProgress(((y + 1) * 100 / h).toFixed(4));
+				}
+			}
 		}
 
 		return { hexString: partialStr + "`", indexMap };
@@ -536,11 +542,11 @@ const BLUE32_U8 = new Uint8Array([
 /*export*/ async function runGLPipeline({ canvas, data, w, h, mode, rgbPalette, outImgData, onProgress }) {
 	const engine = new GLEngine(canvas);
 	// GPU renders all at once — simulate progress
-	onProgress("25.00");
-	await new Promise(r => requestAnimationFrame(r));
-	onProgress("50.00");
-	await new Promise(r => requestAnimationFrame(r));
-	const result = engine.render({ data, w, h, mode, rgbPalette, outImgData });
-	onProgress("100.00");
+	//onProgress(`${(25).toFixed(4)}`);
+	//await new Promise(r => requestAnimationFrame(r));
+	//onProgress(`${(50).toFixed(4)}`);
+	//await new Promise(r => requestAnimationFrame(r));
+	const result = await engine.render({ data, w, h, mode, rgbPalette, outImgData, onProgress });
+	//onProgress(`${(100).toFixed(4)}`);
 	return result;
 }

@@ -22,7 +22,7 @@ document.querySelector("body").insertAdjacentHTML('beforeend',`
 <label>Select Target Source Image:</label>
 <input
 	type="file"
-	id="image-file-reader"
+	id="file"
 >
 <form action="#" method="POST" id="parameters">
 	<div class="settings-group">
