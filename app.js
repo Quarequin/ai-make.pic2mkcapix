@@ -189,10 +189,13 @@ engineSelect.addEventListener("change", function () {
 
 	const isGPU = this.value === "gpu";
 	const errorDefusionOptgroup = document.getElementById("error-defusion-option");
+	const errorDefusionOption = document.querySelector("optgroup#error-defusion-option > *");
 	if (isGPU) {
 		if (modeSelect.value === "error") modeSelect.value = "solid";
 		if (errorDefusionOptgroup) errorDefusionOptgroup.style.display = "none";
+		if (errorDefusionOption) errorDefusionOption.style.display = "none";
 	} else {
+		if (errorDefusionOption) errorDefusionOption.style.display = "block";
 		if (errorDefusionOptgroup) errorDefusionOptgroup.style.display = "block";
 	}
 	addToSessionLog(
