@@ -13,6 +13,9 @@ let lastW = 0,
 let animFrames = [];
 let currentFrameIndex = 0;
 let isAnimating = false;
+function isValidHexRGB(val) {
+    return (/^#[0-9A-Fa-f]{3,4}$/.test(val)||/^#[0-9A-Fa-f]{6}$/.test(val)||/^#[0-9A-Fa-f]{8}$/.test(val))
+}
 // ============================================================
 //  PREDEFINED PALETTES
 // ============================================================
@@ -434,7 +437,12 @@ function updatePaletteCountLabel() {
 }
 
 function bindColorPairEvents(pair, idx) {
-	const palColor = predefinedPalettes[predefinedPaletteSelect.value][idx+1];
+	let palColor = "";
+	try {
+	    palColor = predefinedPalettes[predefinedPaletteSelect.value][idx+1];
+	} catch {
+	    palColor = "";
+	}
 	const picker = pair.querySelector('input[type="color"]');
 	const txt = pair.querySelector(".colortext");
 	picker.addEventListener("input", function () {
@@ -443,10 +451,10 @@ function bindColorPairEvents(pair, idx) {
 	txt.addEventListener("input", function () {
 		let val = this.value.trim();
 		if (!val.startsWith("#")) val = "#" + val;
-		if (/^#[0-9A-Fa-f]{3,4}$/.test(val)||/^#[0-9A-Fa-f]{6}$/.test(val)||/^#[0-9A-Fa-f]{8}$/.test(val)) {
+		if (isValidHexRGB(val)) {
 			picker.value = val;
 			this.value = val;
-			if (val !== palColor) {
+			if (isValidHexRGB(palColor) && val !== palColor) {
 				predefinedPaletteSelect.querySelector('option[value="custom"]').classList.remove("hidden");
 				predefinedPaletteSelect.value = "custom";
 			}
@@ -455,14 +463,14 @@ function bindColorPairEvents(pair, idx) {
 	txt.addEventListener("change", function () {
 		let val = this.value.trim();
 		if (!val.startsWith("#")) val = "#" + val;
-		if (/^#[0-9A-Fa-f]{3,4}$/.test(val)||/^#[0-9A-Fa-f]{6}$/.test(val)||/^#[0-9A-Fa-f]{8}$/.test(val)) {
+		if (isValidHexRGB(val)) {
 			picker.value = val;
 			this.value = val;
 			addToSessionLog(
 				"PALETTE",
 				`Color slot ${idx + 1} updated to ${val}`,
 			);
-			if (val !== palColor) {
+			if (isValidHexRGB(palColor) && val !== palColor) {
 				predefinedPaletteSelect.querySelector('option[value="custom"]').classList.remove("hidden");
 				predefinedPaletteSelect.value = "custom";
 			}
@@ -632,11 +640,11 @@ function parseCurrentPalette() {
 	].concat(
 		Array.from(colorpad.querySelectorAll(".color-pair")).map((pair) => {
 			const hex = pair.querySelector('input[type="color"]').value;
-			if (hex.length < 6) return {
-				r: parseInt(hex.substring(1, 1), 16)<<4,
-				g: parseInt(hex.substring(2, 2), 16)<<4,
-				b: parseInt(hex.substring(3, 3), 16)<<4,
-				a: parseInt(hex.substring(4, 4), 16)<<4 || 255,
+			if (/^#[0-9A-Fa-f]{3,4}$/.test(hex)) return {
+				r: (parseInt(hex.substring(1, 2), 16)<<4),
+				g: (parseInt(hex.substring(2, 3), 16)<<4),
+				b: (parseInt(hex.substring(3, 4), 16)<<4),
+				a: (parseInt(hex.substring(4, 5), 16)<<4) || 255,
 			};
 			return {
 				r: parseInt(hex.substring(1, 3), 16),
