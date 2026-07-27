@@ -26,6 +26,18 @@ body {
 
 body > h1 { position: relative; z-index: 720; }
 
+body hr {
+	border-style: none;
+	border-top-style: solid;
+	border-color: #7aa2f7;
+}
+
+div hr {
+	border-style: none;
+	border-top-style: dashed;
+	border-color: #383e5a;
+}
+
 input[disabled] { pointer-events: none; cursor: not-allowed; }
 
 /* ============================================================
@@ -73,18 +85,19 @@ input[disabled] { pointer-events: none; cursor: not-allowed; }
 
 .loader-content {
 	text-align: center;
-	display: block;
+	display: inline-block;
 }
 
 .loader-spinner {
 	width: 50px;
 	height: 50px;
-	border: 4px solid var(--border-color);
+	border: 4px double var(--border-color);
 	border-top: 4px solid var(--accent-color);
+	border-bottom: 4px solid var(--accent-color);
 	border-radius: 50%;
 	animation: spin 1s linear infinite;
 	margin: 0 auto 20px auto;
-	display: block;
+	display: inline-block;
 }
 
 .loader-text {
@@ -108,12 +121,12 @@ input[disabled] { pointer-events: none; cursor: not-allowed; }
 }
 
 #parameters {
-	border: 1px solid var(--terminal-green);
+	border: 3px double var(--terminal-green);
 	background: var(--bg-color);
 	color: var(--text-color);
 	margin: 5px 0;
 	padding: 7.5px;
-	border-radius: 0.3em;
+	border-radius: 1em 1em 1.72em 1.72em;
 	display: block;
 }
 
@@ -174,10 +187,11 @@ input[disabled] { pointer-events: none; cursor: not-allowed; }
 }
 
 .size-settings-grid input[type="number"] {
-	margin: 4px 0;
+	margin: 5px 0;
 	display: block;
 	float: right;
 	width: 50%;
+	font-family: var(--main-mono-font);
 }
 
 .dropdown-selection-group {
@@ -292,8 +306,10 @@ input[disabled] { pointer-events: none; cursor: not-allowed; }
 
 .colorboard .colorpad .color-pair input[type="color"] {
 	padding: 0px;
+	border-radius: 0.3em;
 	width: 1.3em;
 	margin-right: 5px;
+	border-style: solid;
 	display: inline-block;
 }
 
@@ -318,25 +334,26 @@ input[disabled] { pointer-events: none; cursor: not-allowed; }
 label { display: block; margin: 10px 0; }
 
 input {
-	background-color: var(--bg-color);
+	background-color: transparent/*var(--bg-color)*/;
 	border-color: var(--border-color);
 	color: var(--text-color);
-	border-style: solid;
-	border-radius: 0.3em;
-	padding: 5px;
+	border-style: none;
+	border-bottom-style: solid;
+	/*border-radius: 0.3em;*/
+	padding: 2.5px;
 	font-family: var(--main-font);
 }
 
 div.tab-panel textarea {
 	clear: both;
 	display: block;
-	border-radius: 1.2em;
-	background-color: var(--bg-color);
+	border-radius: 0.0em 0.0em 0.8em 0.8em;
+	background-color: var(--panel-bg);
 	color: var(--terminal-green);
 	width: 100%;
 	padding: 15px;
 	min-height: 20rem;
-	margin-top: 15px;
+	margin-top: 1px;
 	resize: none;
 	white-space: pre;
 	overflow: auto;
@@ -466,6 +483,7 @@ input[type="file"] {
 	padding: 0.8em;
 	border: 1px dashed var(--accent-color);
 	display: block;
+	border-radius: 0.3em;
 	margin-bottom: 15px;
 	width: 100%;
 	max-width: 400px;
@@ -666,26 +684,26 @@ input[type="file"] {
 .tab-btn {
 	display: block;
 	float: left;
-	background: var(--bg-color);
+	background: var(--panel-bg);
 	color: var(--text-color);
 	border: 1px solid var(--border-color);
 	border-bottom: none;
 	border-radius: 4px 4px 0 0;
-	padding: 7px 18px;
+	padding: 7px;
 	cursor: pointer;
 	font-size: 13px;
 	font-family: var(--main-font);
-	margin-right: 4px;
+	margin-left: 0.38em;
+	margin-bottom: -0.9px;
 	opacity: 0.6;
 }
 
 .tab-btn.active {
-	background: var(--panel-bg);
+	background: var(--bg-color);
 	color: var(--accent-color);
 	opacity: 1;
 	font-weight: bold;
-	border-bottom: 1px solid var(--panel-bg);
-	margin-bottom: -1px;
+	border-bottom: 1px solid var(--bg-color);
 	position: relative;
 	z-index: 1;
 }

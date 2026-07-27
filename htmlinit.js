@@ -1,6 +1,4 @@
-const BODY_HOME = document.getElementById("body-home");
-
-BODY_HOME.insertAdjacentHTML('beforeend',`
+document.querySelector("body").insertAdjacentHTML('beforeend',`
 <!-- Loading Screen -->
 <div id="page-loader">
 	<br>
@@ -122,9 +120,7 @@ BODY_HOME.insertAdjacentHTML('beforeend',`
 						</option>
 					</optgroup>
 				</select>
-			</div>
-
-			<div class="dropdown-selection-group">
+				<hr>
 				<label for="subpixel-select" class="dropdown-label"
 					>Sub-pixel &amp; Edge Enhancement Options:</label
 				>
@@ -148,52 +144,50 @@ BODY_HOME.insertAdjacentHTML('beforeend',`
 						Small-scale Anti-Aliasing (Micro Blur)
 					</option>
 				</select>
-			</div>
-
-			<div class="dropdown-selection-group" id="ascii-options-group">
-				<label class="dropdown-label">ASCII Art Output Options:</label>
-				<label class="full-row">
-					<input type="checkbox" id="ascii-enable" > Enable ASCII
-					Output (in Output Tab)
-				</label>
-				<div
-					id="ascii-sub-options"
-					style="display: none; margin-top: 8px"
-				>
-					<label
-						for="ascii-charset-select"
-						class="dropdown-label"
-						style="margin-top: 8px"
-						>ASCII Character Set:</label
+				<hr>
+				<div id="ascii-options-group">
+					<label class="dropdown-label">ASCII Art Output Options:</label>
+					<label class="full-row">
+						<input type="checkbox" id="ascii-enable" > Enable ASCII
+						Output (in Output Tab)
+					</label>
+					<div
+						id="ascii-sub-options"
+						style="display: none; margin-top: 8px"
 					>
-					<select id="ascii-charset-select" class="custom-dropdown">
-						<option value="standard">
-							Standard (█▓▒░ + Symbols)
-						</option>
-						<option value="block">Block Only (█ ▓ ▒ ░ ·)</option>
-						<option value="alphanumeric">
-							Alphanumeric (A-Z, 0-9)
-						</option>
-						<option value="minimal">Minimal ( .:-=+*#%@)</option>
-						<option value="dense">
-							Dense (Full Printable ASCII)
-						</option>
-					</select>
-					<label for="ascii-width-input" style="margin-top: 8px"
-						>ASCII Columns:</label
-					>
-					<input
-						type="number"
-						id="ascii-width-input"
-						value="80"
-						min="10"
-						max="400"
-						class="custom"
-					>
+						<label
+							for="ascii-charset-select"
+							class="dropdown-label"
+							style="margin-top: 8px"
+							>ASCII Character Set:</label
+						>
+						<select id="ascii-charset-select" class="custom-dropdown">
+							<option value="standard">
+								Standard (█▓▒░ + Symbols)
+							</option>
+							<option value="block">Block Only (█ ▓ ▒ ░ ·)</option>
+							<option value="alphanumeric">
+								Alphanumeric (A-Z, 0-9)
+							</option>
+							<option value="minimal">Minimal ( .:-=+*#%@)</option>
+							<option value="dense">
+								Dense (Full Printable ASCII)
+							</option>
+						</select>
+						<label for="ascii-width-input" style="margin-top: 8px"
+							>ASCII Columns:</label
+						>
+						<input
+							type="number"
+							id="ascii-width-input"
+							value="80"
+							min="10"
+							max="400"
+							class="custom"
+						>
+					</div>
 				</div>
-			</div>
-
-			<div class="dropdown-selection-group">
+				<hr>
 				<label class="dropdown-label">Processing Engine:</label>
 				<select id="engine-select" class="custom-dropdown">
 					<option value="cpu" selected>CPU (JavaScript)</option>

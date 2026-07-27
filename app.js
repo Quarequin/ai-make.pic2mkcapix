@@ -116,10 +116,10 @@ const paletteAddBtn = document.getElementById("palette-add-btn");
 const paletteRemoveBtn = document.getElementById("palette-remove-btn");
 const paletteCountLbl = document.getElementById("palette-count-label");
 const predefinedFileMediaType = {
-	"image/png":true,"image/jpeg":true,"image/jpg":true,
-	"image/jpe":true,"image/jxl":true ,"image/bmp":true,
-	"image/gif":true,"image/webp":true,"image/apng":true,
-	"vedio/webm":true
+	"image/png":"png","image/jpeg":"jpeg","image/jpg":"jpg",
+	"image/jpe":"jpe","image/jxl":"jxl","image/bmp":"bmp",
+	"image/gif":"gif","image/webp":"webp","image/apng":"apng",
+	"vedio/webm":"webm"
 };
 
 let originalImageSize = { width: 0, height: 0 };
