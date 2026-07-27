@@ -100,10 +100,10 @@ document.querySelector("body").insertAdjacentHTML('beforeend',`
 					>Render Options (Dithering Method):</label
 				>
 				<select id="mode-select" class="custom-dropdown">
+					<option value="solid" selected>
+						Solid (No Dithering)
+					</option>
 					<optgroup label="Ordered Dithering (Bayer)">
-						<option value="solid" selected>
-							Solid Palette Color (No Dithering)
-						</option>
 						<option value="bayer4">Bayer Matrix 4×4</option>
 						<option value="bayer8">Bayer Matrix 8×8</option>
 						<option value="bayer16">Bayer Matrix 16×16</option>
@@ -125,24 +125,28 @@ document.querySelector("body").insertAdjacentHTML('beforeend',`
 					>Sub-pixel &amp; Edge Enhancement Options:</label
 				>
 				<select id="subpixel-select" class="custom-dropdown">
-					<option value="none" selected>
-						None (Standard Pixel Mapping)
-					</option>
-					<option value="solidIndexing">
-						Solid Indexing — Linear Encludien (Crisp, No Blur)
-					</option>
-					<option value="hinted">
-						Grid-Aligned Pixel Hinting (Font-Style)
-					</option>
-					<option value="antialias">
-						Anti-Aliasing Smoothing Blend
-					</option>
-					<option value="nearestNeighbor">
-						Nearest Neighbor Sharp Alignment
-					</option>
-					<option value="smallAntiAliasing">
-						Small-scale Anti-Aliasing (Micro Blur)
-					</option>
+					<optgroup label="Aliasing">
+						<option value="none" selected>
+							None (Standard Pixel Mapping)
+						</option>
+						<option value="solidIndexing">
+							Solid Indexing — Linear Encludien (Crisp, No Blur)
+						</option>
+						<option value="nearestNeighbor">
+							Nearest Neighbor Sharp Alignment
+						</option>
+					</optgroup>
+					<optgroup label="Anti Aliasing">
+						<option value="hinted">
+							Grid-Aligned Pixel Hinting (Font-Style)
+						</option>
+						<option value="antialias">
+							Anti-Aliasing Smoothing Blend
+						</option>
+						<option value="smallAntiAliasing">
+							Small-scale Anti-Aliasing (Micro Blur)
+						</option>
+					</optgroup>
 				</select>
 				<hr>
 				<div id="ascii-options-group">
@@ -206,17 +210,20 @@ document.querySelector("body").insertAdjacentHTML('beforeend',`
 					class="custom-dropdown"
 					style="margin-bottom: 10px"
 				>
-					<option value="arcade" selected>Arcade</option>
-					<option value="matte">Matte</option>
-					<option value="pastel">Pastel</option>
-					<option value="sweet">Sweet</option>
-					<option value="poke">Poke</option>
-					<option value="adventure">Adventure</option>
-					<option value="diy">DIY</option>
-					<option value="adafruit">Adafruit</option>
-					<option value="still_life">Still Life</option>
-					<option value="steam_punk">Steam Punk</option>
-					<option value="grayscale">Grayscale</option>
+					<option value="custom" class="hidden">Custom</option>
+					<optgroup label="Makecode Arcade">
+						<option value="arcade" selected>Arcade</option>
+						<option value="matte">Matte</option>
+						<option value="pastel">Pastel</option>
+						<option value="sweet">Sweet</option>
+						<option value="poke">Poke</option>
+						<option value="adventure">Adventure</option>
+						<option value="diy">DIY</option>
+						<option value="adafruit">Adafruit</option>
+						<option value="still_life">Still Life</option>
+						<option value="steam_punk">Steam Punk</option>
+						<option value="grayscale">Grayscale</option>
+					</optgroup>
 				</select>
 
 				<label>Import Custom Palette File (.txt, .hex):</label>

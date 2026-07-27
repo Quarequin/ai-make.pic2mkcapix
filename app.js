@@ -13,6 +13,198 @@ let lastW = 0,
 let animFrames = [];
 let currentFrameIndex = 0;
 let isAnimating = false;
+// ============================================================
+//  PREDEFINED PALETTES
+// ============================================================
+const predefinedPalettes = {
+	arcade: [
+		"#ffffff",
+		"#ff2121",
+		"#ff93c4",
+		"#ff8135",
+		"#fff609",
+		"#249ca3",
+		"#78dc52",
+		"#003fad",
+		"#87f2ff",
+		"#8e2ec4",
+		"#a4839f",
+		"#5c406c",
+		"#e5cdc4",
+		"#91463d",
+		"#000000",
+	],
+	matte: [
+		"#ffffff",
+		"#ff455a",
+		"#ffaebc",
+		"#ffab3c",
+		"#fffa40",
+		"#278c3f",
+		"#37e650",
+		"#5e70d4",
+		"#99d5e5",
+		"#a845ff",
+		"#cfa4ff",
+		"#7a4a8b",
+		"#ffcca4",
+		"#bd7f47",
+		"#41344e",
+	],
+	pastel: [
+		"#ffffff",
+		"#ffb0a1",
+		"#ffd6ec",
+		"#ffdca1",
+		"#fffda1",
+		"#a1ffe1",
+		"#baffc1",
+		"#a1d6ff",
+		"#e1ffff",
+		"#d6a1ff",
+		"#eaccff",
+		"#bdb0d6",
+		"#fff0e1",
+		"#d6a1a1",
+		"#696a6a",
+	],
+	sweet: [
+		"#ffffff",
+		"#803d41",
+		"#9ad46a",
+		"#eb8b4a",
+		"#f6d86e",
+		"#18544a",
+		"#31a477",
+		"#365f91",
+		"#6bd0ff",
+		"#653780",
+		"#9f7bb1",
+		"#d6b8c0",
+		"#e7d7c1",
+		"#ac896e",
+		"#4f455a",
+	],
+	poke: [
+		"#ffffff",
+		"#e4595d",
+		"#f7a171",
+		"#fced8c",
+		"#69d8af",
+		"#71aa6a",
+		"#2c6eb7",
+		"#5196d8",
+		"#8aa7cc",
+		"#b070cc",
+		"#dea3ea",
+		"#ace6a2",
+		"#e7ccae",
+		"#9a6d5f",
+		"#454545",
+	],
+	adventure: [
+		"#ffffff",
+		"#e9d4a9",
+		"#c57e7d",
+		"#a74e5a",
+		"#f8ae49",
+		"#9d9d5a",
+		"#557d4a",
+		"#0f4a6d",
+		"#3b83a1",
+		"#4d5061",
+		"#6e81a1",
+		"#a1acbd",
+		"#e7e7e7",
+		"#714a47",
+		"#1c1f21",
+	],
+	diy: [
+		"#ffffff",
+		"#ff0000",
+		"#ff99aa",
+		"#ffcc00",
+		"#ffff00",
+		"#00ff00",
+		"#00cc00",
+		"#000000",
+		"#00ffff",
+		"#aa00ff",
+		"#cc99ff",
+		"#aaaaaa",
+		"#eebbaa",
+		"#884400",
+		"#000000",
+	],
+	adafruit: [
+		"#ffffff",
+		"#ff0000",
+		"#ff5500",
+		"#ffaa00",
+		"#ffff00",
+		"#00ff00",
+		"#00aa55",
+		"#000000",
+		"#00aaff",
+		"#aa00ff",
+		"#ff00ff",
+		"#aaaaaa",
+		"#555555",
+		"#ff55aa",
+		"#000000",
+	],
+	still_life: [
+		"#ffffff",
+		"#9be2de",
+		"#ff6f5a",
+		"#e0946a",
+		"#e8c466",
+		"#adcdd5",
+		"#69b477",
+		"#54818e",
+		"#61a4c4",
+		"#9d94d1",
+		"#6b5a83",
+		"#8d796e",
+		"#c7ae9e",
+		"#706059",
+		"#3d3a4f",
+	],
+	steam_punk: [
+		"#ffffff",
+		"#b4dad6",
+		"#3b3740",
+		"#664d49",
+		"#9f6751",
+		"#737156",
+		"#9f0866",
+		"#647d87",
+		"#8aa1ab",
+		"#7d7187",
+		"#a392a5",
+		"#bdbdc5",
+		"#e4e7ea",
+		"#a59487",
+		"#59555a",
+	],
+	grayscale: [
+		"#ffffff",
+		"#f7f7f7",
+		"#e1e1e1",
+		"#cccccc",
+		"#b8b8b8",
+		"#a3a3a3",
+		"#8e8e8e",
+		"#7a7a7a",
+		"#666666",
+		"#515151",
+		"#3d3d3d",
+		"#292929",
+		"#141414",
+		"#000000",
+		"#000000",
+	],
+};
 
 function addToSessionLog(type, message, detail) {
 	const timestamp = new Date().toISOString().split("T")[1].substring(0, 8);
@@ -242,27 +434,44 @@ function updatePaletteCountLabel() {
 }
 
 function bindColorPairEvents(pair, idx) {
+	const palColor = predefinedPalettes[predefinedPaletteSelect.value][idx+1];
 	const picker = pair.querySelector('input[type="color"]');
 	const txt = pair.querySelector(".colortext");
 	picker.addEventListener("input", function () {
 		txt.value = this.value;
 	});
+	txt.addEventListener("input", function () {
+		let val = this.value.trim();
+		if (!val.startsWith("#")) val = "#" + val;
+		if (/^#[0-9A-Fa-f]{3,4}$/.test(val)||/^#[0-9A-Fa-f]{6}$/.test(val)||/^#[0-9A-Fa-f]{8}$/.test(val)) {
+			picker.value = val;
+			this.value = val;
+			if (val !== palColor) {
+				predefinedPaletteSelect.querySelector('option[value="custom"]').classList.remove("hidden");
+				predefinedPaletteSelect.value = "custom";
+			}
+		}
+	});
 	txt.addEventListener("change", function () {
 		let val = this.value.trim();
 		if (!val.startsWith("#")) val = "#" + val;
-		if (/^#[0-9A-Fa-f]{6,8}$/.test(val)) {
+		if (/^#[0-9A-Fa-f]{3,4}$/.test(val)||/^#[0-9A-Fa-f]{6}$/.test(val)||/^#[0-9A-Fa-f]{8}$/.test(val)) {
 			picker.value = val;
 			this.value = val;
 			addToSessionLog(
 				"PALETTE",
 				`Color slot ${idx + 1} updated to ${val}`,
 			);
+			if (val !== palColor) {
+				predefinedPaletteSelect.querySelector('option[value="custom"]').classList.remove("hidden");
+				predefinedPaletteSelect.value = "custom";
+			}
 		} else {
 			addToSessionLog("PALETTE_FAULT", `Invalid hex code typed: ${val}`);
 			displayErrorPopup(
 				"Invalid Color HEX Input",
 				`The color code "${val}" is invalid.`,
-				"Please use Hexadecimal format such as #FFFFFF only.",
+				"Please use Hexadecimal format such as #FFF, #FFFF, #FFFFFF or #FFFFFFFF only.",
 			);
 			this.value = picker.value;
 		}
@@ -304,200 +513,9 @@ paletteRemoveBtn.addEventListener("click", function () {
 	);
 });
 
-// ============================================================
-//  PREDEFINED PALETTES
-// ============================================================
-const predefinedPalettes = {
-	arcade: [
-		"#ffffff",
-		"#ff2121",
-		"#ff93c4",
-		"#ff8135",
-		"#fff609",
-		"#249ca3",
-		"#78dc52",
-		"#003fad",
-		"#87f2ff",
-		"#8e2ec4",
-		"#a4839f",
-		"#5c406c",
-		"#e5cdc4",
-		"#91463d",
-		"#000000",
-	],
-	matte: [
-		"#ffffff",
-		"#ff455a",
-		"#ffaebc",
-		"#ffab3c",
-		"#fffa40",
-		"#278c3f",
-		"#37e650",
-		"#5e70d4",
-		"#99d5e5",
-		"#a845ff",
-		"#cfa4ff",
-		"#7a4a8b",
-		"#ffcca4",
-		"#bd7f47",
-		"#41344e",
-	],
-	pastel: [
-		"#ffffff",
-		"#ffb0a1",
-		"#ffd6ec",
-		"#ffdca1",
-		"#fffda1",
-		"#a1ffe1",
-		"#baffc1",
-		"#a1d6ff",
-		"#e1ffff",
-		"#d6a1ff",
-		"#eaccff",
-		"#bdb0d6",
-		"#fff0e1",
-		"#d6a1a1",
-		"#696a6a",
-	],
-	sweet: [
-		"#ffffff",
-		"#803d41",
-		"#9ad46a",
-		"#eb8b4a",
-		"#f6d86e",
-		"#18544a",
-		"#31a477",
-		"#365f91",
-		"#6bd0ff",
-		"#653780",
-		"#9f7bb1",
-		"#d6b8c0",
-		"#e7d7c1",
-		"#ac896e",
-		"#4f455a",
-	],
-	poke: [
-		"#ffffff",
-		"#e4595d",
-		"#f7a171",
-		"#fced8c",
-		"#69d8af",
-		"#71aa6a",
-		"#2c6eb7",
-		"#5196d8",
-		"#8aa7cc",
-		"#b070cc",
-		"#dea3ea",
-		"#ace6a2",
-		"#e7ccae",
-		"#9a6d5f",
-		"#454545",
-	],
-	adventure: [
-		"#ffffff",
-		"#e9d4a9",
-		"#c57e7d",
-		"#a74e5a",
-		"#f8ae49",
-		"#9d9d5a",
-		"#557d4a",
-		"#0f4a6d",
-		"#3b83a1",
-		"#4d5061",
-		"#6e81a1",
-		"#a1acbd",
-		"#e7e7e7",
-		"#714a47",
-		"#1c1f21",
-	],
-	diy: [
-		"#ffffff",
-		"#ff0000",
-		"#ff99aa",
-		"#ffcc00",
-		"#ffff00",
-		"#00ff00",
-		"#00cc00",
-		"#000000",
-		"#00ffff",
-		"#aa00ff",
-		"#cc99ff",
-		"#aaaaaa",
-		"#eebbaa",
-		"#884400",
-		"#000000",
-	],
-	adafruit: [
-		"#ffffff",
-		"#ff0000",
-		"#ff5500",
-		"#ffaa00",
-		"#ffff00",
-		"#00ff00",
-		"#00aa55",
-		"#000000",
-		"#00aaff",
-		"#aa00ff",
-		"#ff00ff",
-		"#aaaaaa",
-		"#555555",
-		"#ff55aa",
-		"#000000",
-	],
-	still_life: [
-		"#ffffff",
-		"#9be2de",
-		"#ff6f5a",
-		"#e0946a",
-		"#e8c466",
-		"#adcdd5",
-		"#69b477",
-		"#54818e",
-		"#61a4c4",
-		"#9d94d1",
-		"#6b5a83",
-		"#8d796e",
-		"#c7ae9e",
-		"#706059",
-		"#3d3a4f",
-	],
-	steam_punk: [
-		"#ffffff",
-		"#b4dad6",
-		"#3b3740",
-		"#664d49",
-		"#9f6751",
-		"#737156",
-		"#9f0866",
-		"#647d87",
-		"#8aa1ab",
-		"#7d7187",
-		"#a392a5",
-		"#bdbdc5",
-		"#e4e7ea",
-		"#a59487",
-		"#59555a",
-	],
-	grayscale: [
-		"#ffffff",
-		"#f7f7f7",
-		"#e1e1e1",
-		"#cccccc",
-		"#b8b8b8",
-		"#a3a3a3",
-		"#8e8e8e",
-		"#7a7a7a",
-		"#666666",
-		"#515151",
-		"#3d3d3d",
-		"#292929",
-		"#141414",
-		"#000000",
-		"#000000",
-	],
-};
-
 predefinedPaletteSelect.addEventListener("change", function () {
+	if (this.value === "custom" || !predefinedPalettes[this.value]) return;
+	this.querySelector('option[value="custom"]').classList.add("hidden");
 	const colors = predefinedPalettes[this.value];
 	if (!colors) return;
 	const targetCount = colors.length;
@@ -546,7 +564,7 @@ paletteFileInput.addEventListener("change", function (e) {
 			const colorsFound = [];
 			evt.target.result.split(/\r?\n/).forEach((line) => {
 				const clean = line.trim().replace(/;.*$/, "").trim();
-				const match = clean.match(/#?([0-9A-Fa-f]{6,8})/);
+				const match = clean.match(/#?([0-9A-Fa-f]{3,4})/)||clean.match(/#?([0-9A-Fa-f]{6})/)||clean.match(/#?([0-9A-Fa-f]{8})/);
 				if (match) colorsFound.push("#" + match[1].toLowerCase());
 			});
 			if (colorsFound.length > 0) {
@@ -590,6 +608,8 @@ paletteFileInput.addEventListener("change", function (e) {
 					"Please verify the file contents.",
 				);
 			}
+			predefinedPaletteSelect.querySelector('option[value="custom"]').classList.remove("hidden");
+			predefinedPaletteSelect.value = "custom";
 		} catch (err) {
 			displayErrorPopup(
 				"Palette Processor Runtime Fault",
@@ -612,6 +632,12 @@ function parseCurrentPalette() {
 	].concat(
 		Array.from(colorpad.querySelectorAll(".color-pair")).map((pair) => {
 			const hex = pair.querySelector('input[type="color"]').value;
+			if (hex.length < 6) return {
+				r: parseInt(hex.substring(1, 1), 16)<<4,
+				g: parseInt(hex.substring(2, 2), 16)<<4,
+				b: parseInt(hex.substring(3, 3), 16)<<4,
+				a: parseInt(hex.substring(4, 4), 16)<<4 || 255,
+			};
 			return {
 				r: parseInt(hex.substring(1, 3), 16),
 				g: parseInt(hex.substring(3, 5), 16),

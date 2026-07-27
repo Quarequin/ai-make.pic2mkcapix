@@ -331,6 +331,8 @@ input[disabled] { pointer-events: none; cursor: not-allowed; }
 	font-family: var(--main-mono-font);
 }
 
+option.hidden { display: none; }
+
 label { display: block; margin: 10px 0; }
 
 input {
