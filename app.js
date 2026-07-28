@@ -14,7 +14,7 @@ let animFrames = [];
 let currentFrameIndex = 0;
 let isAnimating = false;
 function isValidHexRGB(val) {
-    return (/^#[0-9A-Fa-f]{3,4}$/.test(val)||/^#[0-9A-Fa-f]{6}$/.test(val)||/^#[0-9A-Fa-f]{8}$/.test(val))
+	return (/^#[0-9A-Fa-f]{3,4}$/.test(val)||/^#[0-9A-Fa-f]{6}$/.test(val)||/^#[0-9A-Fa-f]{8}$/.test(val))
 }
 // ============================================================
 //  PREDEFINED PALETTES
@@ -439,9 +439,9 @@ function updatePaletteCountLabel() {
 function bindColorPairEvents(pair, idx) {
 	let palColor = "";
 	try {
-	    palColor = predefinedPalettes[predefinedPaletteSelect.value][idx+1];
+		palColor = predefinedPalettes[predefinedPaletteSelect.value][idx+1];
 	} catch {
-	    palColor = "";
+		palColor = "";
 	}
 	const picker = pair.querySelector('input[type="color"]');
 	const txt = pair.querySelector(".colortext");
