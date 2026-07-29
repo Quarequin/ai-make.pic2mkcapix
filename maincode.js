@@ -16,6 +16,32 @@ let isAnimating = false;
 function isValidHexRGB(val) {
 	return (/^#[0-9A-Fa-f]{3,4}$/.test(val)||/^#[0-9A-Fa-f]{6}$/.test(val)||/^#[0-9A-Fa-f]{8}$/.test(val))
 }
+// Shared hex -> {r,g,b,a} parser (0-255 each). Correctly expands 3/4-digit
+// shorthand by duplicating each nibble (per CSS shorthand-color spec) instead
+// of left-shifting it, and treats a=0 (fully transparent) as valid rather
+// than falling back to opaque via `|| 255`.
+function hexToRgba(hex) {
+	const h = hex.replace("#", "");
+	const nib = (c) => parseInt(c, 16);
+	const dup = (n) => (n << 4) | n;
+	if (h.length === 3 || h.length === 4) {
+		const a = h.length === 4 ? dup(nib(h[3])) : 255;
+		return { r: dup(nib(h[0])), g: dup(nib(h[1])), b: dup(nib(h[2])), a };
+	}
+	const a = h.length === 8 ? parseInt(h.substring(6, 8), 16) : 255;
+	return {
+		r: parseInt(h.substring(0, 2), 16),
+		g: parseInt(h.substring(2, 4), 16),
+		b: parseInt(h.substring(4, 6), 16),
+		a: Number.isNaN(a) ? 255 : a,
+	};
+}
+// #rrggbb string for the 6-char-only native <input type="color">, dropping alpha.
+function hexRgbOnly(hex) {
+	const { r, g, b } = hexToRgba(hex);
+	const h2 = (n) => n.toString(16).padStart(2, "0");
+	return `#${h2(r)}${h2(g)}${h2(b)}`;
+}
 // ============================================================
 //  PREDEFINED PALETTES
 // ============================================================
@@ -436,6 +462,25 @@ function updatePaletteCountLabel() {
 	paletteAddBtn.disabled = count >= MAX_PALETTE_SLOTS;
 }
 
+// Applies a (possibly alpha-bearing) hex string to a color-pair: the native
+// <input type="color"> only ever stores 6-digit #rrggbb, so alpha is kept
+// separately on pair.dataset.alpha and re-combined later in parseCurrentPalette.
+function applyHexToPair(pair, hex) {
+	const { a } = hexToRgba(hex);
+	pair.querySelector('input[type="color"]').value = hexRgbOnly(hex);
+	pair.querySelector(".colortext").value = hex;
+	pair.dataset.alpha = String(a);
+}
+
+// Builds one unbound color-pair element (caller still needs bindColorPairEvents).
+function makeColorPairElement(index, hex = "#888888") {
+	const pair = document.createElement("div");
+	pair.className = "color-pair";
+	pair.innerHTML = `<label>Color ${index + 1}</label><input type="color" /><input type="text" class="colortext" />`;
+	applyHexToPair(pair, hex);
+	return pair;
+}
+
 function bindColorPairEvents(pair, idx) {
 	let palColor = "";
 	try {
@@ -445,35 +490,39 @@ function bindColorPairEvents(pair, idx) {
 	}
 	const picker = pair.querySelector('input[type="color"]');
 	const txt = pair.querySelector(".colortext");
+	// alphaColor (an optional 4th hex byte, e.g. #rrggbbaa) can't be stored in
+	// the native <input type="color"> — it always normalizes to 6 digits — so
+	// it's kept alongside it on pair.dataset.alpha instead. Typing it is never
+	// required: a plain #rrggbb still works exactly as before (defaults to 255).
+	if (pair.dataset.alpha === undefined) applyHexToPair(pair, txt.value);
+
+	const markCustomIfChanged = (val) => {
+		if (isValidHexRGB(palColor) && val !== palColor) {
+			predefinedPaletteSelect.querySelector('option[value="custom"]').classList.remove("hidden");
+			predefinedPaletteSelect.value = "custom";
+		}
+	};
+
 	picker.addEventListener("input", function () {
+		// Native swatch has no alpha channel — picking a new color resets to opaque.
+		pair.dataset.alpha = "255";
 		txt.value = this.value;
 	});
 	txt.addEventListener("input", function () {
 		let val = this.value.trim();
 		if (!val.startsWith("#")) val = "#" + val;
 		if (isValidHexRGB(val)) {
-			picker.value = val;
-			this.value = val;
-			if (isValidHexRGB(palColor) && val !== palColor) {
-				predefinedPaletteSelect.querySelector('option[value="custom"]').classList.remove("hidden");
-				predefinedPaletteSelect.value = "custom";
-			}
+			applyHexToPair(pair, val);
+			markCustomIfChanged(val);
 		}
 	});
 	txt.addEventListener("change", function () {
 		let val = this.value.trim();
 		if (!val.startsWith("#")) val = "#" + val;
 		if (isValidHexRGB(val)) {
-			picker.value = val;
-			this.value = val;
-			addToSessionLog(
-				"PALETTE",
-				`Color slot ${idx + 1} updated to ${val}`,
-			);
-			if (isValidHexRGB(palColor) && val !== palColor) {
-				predefinedPaletteSelect.querySelector('option[value="custom"]').classList.remove("hidden");
-				predefinedPaletteSelect.value = "custom";
-			}
+			applyHexToPair(pair, val);
+			addToSessionLog("PALETTE", `Color slot ${idx + 1} updated to ${val}`);
+			markCustomIfChanged(val);
 		} else {
 			addToSessionLog("PALETTE_FAULT", `Invalid hex code typed: ${val}`);
 			displayErrorPopup(
@@ -493,40 +542,9 @@ function reindexColorPairs() {
 	updatePaletteCountLabel();
 }
 
-colorpad.querySelectorAll(".color-pair").forEach((pair, idx) => {
-	bindColorPairEvents(pair, idx);
-});
-updatePaletteCountLabel();
-
-paletteAddBtn.addEventListener("click", function () {
-	const currentCount = colorpad.querySelectorAll(".color-pair").length;
-	if (currentCount >= MAX_PALETTE_SLOTS) return;
-	const newPair = document.createElement("div");
-	newPair.className = "color-pair";
-	newPair.innerHTML = `<label>Color ${currentCount + 1}</label><input type="color" value="#888888" /><input type="text" class="colortext" value="#888888" />`;
-	colorpad.appendChild(newPair);
-	bindColorPairEvents(newPair, currentCount);
-	reindexColorPairs();
-	addToSessionLog("PALETTE", `Added color slot ${currentCount + 1}.`);
-});
-
-paletteRemoveBtn.addEventListener("click", function () {
-	const pairs = colorpad.querySelectorAll(".color-pair");
-	if (pairs.length <= MIN_PALETTE_SLOTS) return;
-	colorpad.removeChild(pairs[pairs.length - 1]);
-	reindexColorPairs();
-	addToSessionLog(
-		"PALETTE",
-		`Removed last color slot (now ${pairs.length - 1} slots).`,
-	);
-});
-
-predefinedPaletteSelect.addEventListener("change", function () {
-	if (this.value === "custom" || !predefinedPalettes[this.value]) return;
-	this.querySelector('option[value="custom"]').classList.add("hidden");
-	const colors = predefinedPalettes[this.value];
-	if (!colors) return;
-	const targetCount = colors.length;
+// Grows/shrinks the colorpad to targetCount slots. colorForIndex(i), if given,
+// supplies the hex to apply to slot i (new AND pre-existing slots up to its length).
+function resizeColorPairsTo(targetCount, colorForIndex) {
 	while (colorpad.querySelectorAll(".color-pair").length > targetCount) {
 		const pairs = colorpad.querySelectorAll(".color-pair");
 		if (pairs.length <= MIN_PALETTE_SLOTS) break;
@@ -537,24 +555,46 @@ predefinedPaletteSelect.addEventListener("change", function () {
 		colorpad.querySelectorAll(".color-pair").length < MAX_PALETTE_SLOTS
 	) {
 		const count = colorpad.querySelectorAll(".color-pair").length;
-		const newPair = document.createElement("div");
-		newPair.className = "color-pair";
-		newPair.innerHTML = `<label>Color ${count + 1}</label><input type="color" value="#888888" /><input type="text" class="colortext" value="#888888" />`;
-		colorpad.appendChild(newPair);
-		bindColorPairEvents(newPair, count);
+		const pair = makeColorPairElement(count);
+		colorpad.appendChild(pair);
+		bindColorPairEvents(pair, count);
 	}
-	colorpad.querySelectorAll(".color-pair").forEach((pair, i) => {
-		if (colors[i]) {
-			pair.querySelector('input[type="color"]').value = colors[i];
-			pair.querySelector(".colortext").value = colors[i];
-		}
-	});
+	if (colorForIndex) {
+		colorpad.querySelectorAll(".color-pair").forEach((pair, i) => {
+			const hex = colorForIndex(i);
+			if (hex) applyHexToPair(pair, hex);
+		});
+	}
 	reindexColorPairs();
+}
+
+colorpad.querySelectorAll(".color-pair").forEach((pair, idx) => {
+	bindColorPairEvents(pair, idx);
+});
+updatePaletteCountLabel();
+
+paletteAddBtn.addEventListener("click", function () {
+	const currentCount = colorpad.querySelectorAll(".color-pair").length;
+	if (currentCount >= MAX_PALETTE_SLOTS) return;
+	resizeColorPairsTo(currentCount + 1);
+	addToSessionLog("PALETTE", `Added color slot ${currentCount + 1}.`);
+});
+
+paletteRemoveBtn.addEventListener("click", function () {
+	const currentCount = colorpad.querySelectorAll(".color-pair").length;
+	if (currentCount <= MIN_PALETTE_SLOTS) return;
+	resizeColorPairsTo(currentCount - 1);
+	addToSessionLog("PALETTE", `Removed last color slot (now ${currentCount - 1} slots).`);
+});
+
+predefinedPaletteSelect.addEventListener("change", function () {
+	if (this.value === "custom" || !predefinedPalettes[this.value]) return;
+	this.querySelector('option[value="custom"]').classList.add("hidden");
+	const colors = predefinedPalettes[this.value];
+	if (!colors) return;
+	resizeColorPairsTo(colors.length, (i) => colors[i]);
 	statusDiv.textContent = `System: Loaded predefined "${this.value}" palette schema.`;
-	addToSessionLog(
-		"PALETTE",
-		`Switched layout to predefined scheme: ${this.value}`,
-	);
+	addToSessionLog("PALETTE", `Switched layout to predefined scheme: ${this.value}`);
 });
 
 paletteFileInput.addEventListener("change", function (e) {
@@ -576,39 +616,9 @@ paletteFileInput.addEventListener("change", function (e) {
 				if (match) colorsFound.push("#" + match[1].toLowerCase());
 			});
 			if (colorsFound.length > 0) {
-				while (
-					colorpad.querySelectorAll(".color-pair").length >
-					colorsFound.length
-				) {
-					const pairs = colorpad.querySelectorAll(".color-pair");
-					if (pairs.length <= MIN_PALETTE_SLOTS) break;
-					colorpad.removeChild(pairs[pairs.length - 1]);
-				}
-				while (
-					colorpad.querySelectorAll(".color-pair").length <
-						colorsFound.length
-				) {
-					const count = colorpad.querySelectorAll(".color-pair").length;
-					if (count >= MAX_PALETTE_SLOTS) break;
-					const newPair = document.createElement("div");
-					newPair.className = "color-pair";
-					newPair.innerHTML = `<label>Color ${count + 1}</label><input type="color" value="#888888" /><input type="text" class="colortext" value="#888888" />`;
-					colorpad.appendChild(newPair);
-					bindColorPairEvents(newPair, count);
-				}
-				colorpad.querySelectorAll(".color-pair").forEach((pair, i) => {
-					if (colorsFound[i]) {
-						pair.querySelector('input[type="color"]').value =
-							colorsFound[i];
-						pair.querySelector(".colortext").value = colorsFound[i];
-					}
-				});
-				reindexColorPairs();
+				resizeColorPairsTo(colorsFound.length, (i) => colorsFound[i]);
 				statusDiv.textContent = `System: Loaded ${colorsFound.length} colors from palette file.`;
-				addToSessionLog(
-					"PALETTE",
-					`Imported external palette from ${file.name}.`,
-				);
+				addToSessionLog("PALETTE", `Imported external palette from ${file.name}.`);
 			} else {
 				displayErrorPopup(
 					"Palette Parsing Exception",
@@ -629,29 +639,17 @@ paletteFileInput.addEventListener("change", function (e) {
 	reader.readAsText(file);
 });
 
+// rgbPalette[0] is always the implicit transparent/background register;
+// user slots (indices 1..N) read r/g/b from the color picker and alpha from
+// pair.dataset.alpha. Whether this alpha is actually used in the output is
+// decided later, per-conversion, based on whether the source image itself
+// has transparency — see imageDataHasAlpha() and the hasAlpha pipeline flag.
 function parseCurrentPalette() {
-	rgbPalette = [
-		{
-			r: 0,
-			g: 0,
-			b: 0,
-			a: 0,
-		},
-	].concat(
+	rgbPalette = [{ r: 0, g: 0, b: 0, a: 0 }].concat(
 		Array.from(colorpad.querySelectorAll(".color-pair")).map((pair) => {
-			const hex = pair.querySelector('input[type="color"]').value;
-			if (/^#[0-9A-Fa-f]{3,4}$/.test(hex)) return {
-				r: (parseInt(hex.substring(1, 2), 16)<<4),
-				g: (parseInt(hex.substring(2, 3), 16)<<4),
-				b: (parseInt(hex.substring(3, 4), 16)<<4),
-				a: (parseInt(hex.substring(4, 5), 16)<<4) || 255,
-			};
-			return {
-				r: parseInt(hex.substring(1, 3), 16),
-				g: parseInt(hex.substring(3, 5), 16),
-				b: parseInt(hex.substring(5, 7), 16),
-				a: parseInt(hex.substring(7, 9), 16) || 255,
-			};
+			const { r, g, b } = hexToRgba(pair.querySelector('input[type="color"]').value);
+			const a = parseInt(pair.dataset.alpha, 10);
+			return { r, g, b, a: Number.isNaN(a) ? 255 : a };
 		}),
 	);
 }
@@ -872,6 +870,9 @@ parametersForm.addEventListener("submit", async function (e) {
 
 		const engine = engineSelect.value;
 		let result;
+		// alphaColor only takes effect when the source image itself has
+		// transparency — see matrixcl.js runConversionPipeline / matrixgl.js runGLPipeline.
+		const hasAlpha = imageDataHasAlpha(imgData.data);
 		if (engine === "gpu") {
 			result = await runGLPipeline({
 				canvas,
@@ -881,6 +882,7 @@ parametersForm.addEventListener("submit", async function (e) {
 				mode: modeSelect.value,
 				rgbPalette,
 				outImgData,
+				hasAlpha,
 				onProgress: async (pct) => {
 					runButton.textContent = `Converting... ${pct}%`;
 					statusDiv.textContent = `Processing GPU pipeline... ${pct}%`;
@@ -984,6 +986,7 @@ async function processAnimation(w, h) {
 		const outImgData = ctx.createImageData(w, h);
 
 		let result;
+		const hasAlpha = imageDataHasAlpha(imgData.data);
 		if (engine === "gpu") {
 			result = await runGLPipeline({
 				canvas,
@@ -993,6 +996,7 @@ async function processAnimation(w, h) {
 				mode: modeSelect.value,
 				rgbPalette,
 				outImgData,
+				hasAlpha,
 				onProgress: async () => {},
 			});
 		} else {
@@ -1010,6 +1014,16 @@ async function processAnimation(w, h) {
 	await progressiveTextOutput(combined);
 }
 
+// True if any pixel in this ImageData has partial/zero alpha — i.e. the
+// source image actually has a transparent background, not just a fully
+// opaque photo/JPEG. Used to decide whether alphaColor is honored.
+function imageDataHasAlpha(data) {
+	for (let i = 3; i < data.length; i += 4) {
+		if (data[i] < 255) return true;
+	}
+	return false;
+}
+
 async function runCPUPipelineFallback(imgData, w, h, outImgData) {
 	return await runConversionPipeline({
 		data: imgData.data,
@@ -1019,6 +1033,7 @@ async function runCPUPipelineFallback(imgData, w, h, outImgData) {
 		subPixelOption: subpixelSelect.value,
 		rgbPalette,
 		outImgData,
+		hasAlpha: imageDataHasAlpha(imgData.data),
 		onProgress: async (progressPercent) => {
 			ctx.putImageData(outImgData, 0, 0);
 			runButton.textContent = `Converting... ${progressPercent}%`;

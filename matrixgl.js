@@ -391,14 +391,18 @@ function createProgram(gl, vsSource, fsSource) {
 	}
 }
 
-/*export*/ async function runGLPipeline({ canvas, data, w, h, mode, rgbPalette, outImgData, onProgress }) {
+/*export*/ async function runGLPipeline({ canvas, data, w, h, mode, rgbPalette, outImgData, onProgress, hasAlpha }) {
 	const engine = new GLEngine(canvas);
 	// GPU renders all at once — simulate progress
 	onProgress("25.0000");
 	await new Promise(r => requestAnimationFrame(r));
 	onProgress("50.0000");
 	await new Promise(r => requestAnimationFrame(r));
-	const result = engine.render({ data, w, h, mode, rgbPalette, outImgData });
+	// See matrixcl.js runConversionPipeline for why alphaColor is gated on hasAlpha.
+	const activePalette = hasAlpha
+		? rgbPalette
+		: rgbPalette.map((c, i) => (i === 0 ? c : { r: c.r, g: c.g, b: c.b, a: 255 }));
+	const result = engine.render({ data, w, h, mode, rgbPalette: activePalette, outImgData });
 	onProgress("100.0000");
 	return result;
 }

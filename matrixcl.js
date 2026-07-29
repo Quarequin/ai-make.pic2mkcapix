@@ -184,23 +184,24 @@ async function modeSolid(data, w, h, rgbPalette, outData, onProgress, tmpTable, 
 	return { hexString: partialStr + "`", indexMap };
 }
 
-// ---- ORDERED BAYER (enhanced with 1D error diffusion for smoother blending) ----
-async function modeBayer(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, bayerMatrix, matrixSize) {
+// ---- ORDERED DITHERING (Bayer or Blue Noise — same algorithm, different
+// matrix + normalization; enhanced with 1D error carry for smoother blending) ----
+// `normalize` converts a raw matrix cell to a 0..1 value: Bayer cells range
+// 0..matrixSize^2-1, Blue Noise cells are already 0..255.
+async function modeOrdered(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, matrix, matrixSize, normalize, spread) {
 	const indexMap = new Uint8Array(w * h);
 	const cache = new Map();
 	const mask = matrixSize - 1;
-	const invSizeSq = 1 / (matrixSize * matrixSize);
-	const spread = 72; // Increased from 48 for stronger dithering blend
+	const carryStrength = 0.6;
 	let partialStr = "img`\n";
 	for (let y = 0; y < h; y++) {
 		const rowBase = y * w;
-		const by = (y & mask) * matrixSize;
+		const my = (y & mask) * matrixSize;
 		let carryR = 0, carryG = 0, carryB = 0;
-		const carryStrength = 0.6;
 		for (let x = 0; x < w; x++) {
 			const px = rowBase + x, srcIdx = px << 2;
 			if (data[srcIdx + 3] >= 128) {
-				const factor = (bayerMatrix[by + (x & mask)] * invSizeSq) - 0.5;
+				const factor = normalize(matrix[my + (x & mask)]) - 0.5;
 				const r = clamp(data[srcIdx]	 + carryR + factor * spread);
 				const g = clamp(data[srcIdx + 1] + carryG + factor * spread);
 				const b = clamp(data[srcIdx + 2] + carryB + factor * spread);
@@ -221,41 +222,13 @@ async function modeBayer(data, w, h, rgbPalette, outData, onProgress, tmpTable, 
 	return { hexString: partialStr + "`", indexMap };
 }
 
-// ---- BLUE NOISE (enhanced with 1D error diffusion for smoother blending) ----
-async function modeBlueNoise(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, noiseMatrix, matrixSize) {
-	const indexMap = new Uint8Array(w * h);
-	const cache = new Map();
-	const mask = matrixSize - 1;
-	const inv255 = 1 / 255;
-	const spread = 80; // Increased from 52 for stronger dithering blend
-	let partialStr = "img`\n";
-	for (let y = 0; y < h; y++) {
-		const rowBase = y * w;
-		const ny = (y & mask) * matrixSize;
-		let carryR = 0, carryG = 0, carryB = 0;
-		const carryStrength = 0.6;
-		for (let x = 0; x < w; x++) {
-			const px = rowBase + x, srcIdx = px << 2;
-			if (data[srcIdx + 3] >= 128) {
-				const factor = (noiseMatrix[ny + (x & mask)] * inv255) - 0.5;
-				const r = clamp(data[srcIdx]	 + carryR + factor * spread);
-				const g = clamp(data[srcIdx + 1] + carryG + factor * spread);
-				const b = clamp(data[srcIdx + 2] + carryB + factor * spread);
-				indexMap[px] = cachedFindNearest(r, g, b, rgbPalette, cache);
-				const tc = rgbPalette[indexMap[px]];
-				carryR = (r - tc.r) * carryStrength;
-				carryG = (g - tc.g) * carryStrength;
-				carryB = (b - tc.b) * carryStrength;
-			} else {
-				carryR = carryG = carryB = 0;
-			}
-		}
-		partialStr += buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable);
-		if (y % progressInterval === 0 || y === h - 1) {
-			await onProgress(((y + 1) * 100 / h).toFixed(4));
-		}
-	}
-	return { hexString: partialStr + "`", indexMap };
+function modeBayer(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, bayerMatrix, matrixSize) {
+	const invSizeSq = 1 / (matrixSize * matrixSize);
+	return modeOrdered(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, bayerMatrix, matrixSize, (v) => v * invSizeSq, 72 /* was 48 */);
+}
+
+function modeBlueNoise(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, noiseMatrix, matrixSize) {
+	return modeOrdered(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, noiseMatrix, matrixSize, (v) => v / 255, 80 /* was 52 */);
 }
 
 // ---- FLOYD-STEINBERG ERROR DIFFUSION ----
@@ -311,7 +284,7 @@ async function modeFloydSteinberg(data, w, h, rgbPalette, outData, onProgress, t
 // ============================================================
 // MAIN PIPELINE ROUTER
 // ============================================================
-/*export*/ async function runConversionPipeline({ data, w, h, mode, subPixelOption, rgbPalette, outImgData, onProgress }) {
+/*export*/ async function runConversionPipeline({ data, w, h, mode, subPixelOption, rgbPalette, outImgData, onProgress, hasAlpha }) {
 	const totalPx4 = data.length;
 	const colorCount = rgbPalette.length;
 	const tmpTable = CHAR_TABLE; //colorCount > B32_TABLE.length ? B64_TABLE : (colorCount > HEX_TABLE.length ? B32_TABLE : HEX_TABLE);
@@ -321,24 +294,33 @@ async function modeFloydSteinberg(data, w, h, rgbPalette, outData, onProgress, t
 
 	const outData = outImgData.data;
 
+	// alphaColor (a per-palette-slot transparency value, entered as an optional
+	// 4th hex byte e.g. #rrggbbaa) is only honored when the *source image*
+	// itself has a transparent background. On a fully opaque source there is
+	// nothing for that transparency to composite against, so it's forced back
+	// to fully opaque here rather than silently punching new holes in the output.
+	const activePalette = hasAlpha
+		? rgbPalette
+		: rgbPalette.map((c, i) => (i === 0 ? c : { r: c.r, g: c.g, b: c.b, a: 255 }));
+
 	switch (mode) {
 		case "solid":
-			return await modeSolid(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval);
+			return await modeSolid(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval);
 		case "bayer4":
-			return await modeBayer(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, BAYER4, 4);
+			return await modeBayer(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BAYER4, 4);
 		case "bayer8":
-			return await modeBayer(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, BAYER8, 8);
+			return await modeBayer(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BAYER8, 8);
 		case "bayer16":
-			return await modeBayer(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, BAYER16, 16);
+			return await modeBayer(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BAYER16, 16);
 		case "blue8":
-			return await modeBlueNoise(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, BLUE8, 8);
+			return await modeBlueNoise(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BLUE8, 8);
 		case "blue16":
-			return await modeBlueNoise(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, BLUE16, 16);
+			return await modeBlueNoise(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BLUE16, 16);
 		case "blue32":
-			return await modeBlueNoise(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, BLUE32, 32);
+			return await modeBlueNoise(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BLUE32, 32);
 		case "error":
-			return await modeFloydSteinberg(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval);
+			return await modeFloydSteinberg(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval);
 		default:
-			return await modeSolid(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval);
+			return await modeSolid(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval);
 	}
 }
