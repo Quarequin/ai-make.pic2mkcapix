@@ -184,24 +184,23 @@ async function modeSolid(data, w, h, rgbPalette, outData, onProgress, tmpTable, 
 	return { hexString: partialStr + "`", indexMap };
 }
 
-// ---- ORDERED DITHERING (Bayer or Blue Noise — same algorithm, different
-// matrix + normalization; enhanced with 1D error carry for smoother blending) ----
-// `normalize` converts a raw matrix cell to a 0..1 value: Bayer cells range
-// 0..matrixSize^2-1, Blue Noise cells are already 0..255.
-async function modeOrdered(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, matrix, matrixSize, normalize, spread) {
+// ---- ORDERED BAYER (enhanced with 1D error diffusion for smoother blending) ----
+async function modeBayer(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, bayerMatrix, matrixSize) {
 	const indexMap = new Uint8Array(w * h);
 	const cache = new Map();
 	const mask = matrixSize - 1;
-	const carryStrength = 0.6;
+	const invSizeSq = 1 / (matrixSize * matrixSize);
+	const spread = 72; // Increased from 48 for stronger dithering blend
 	let partialStr = "img`\n";
 	for (let y = 0; y < h; y++) {
 		const rowBase = y * w;
-		const my = (y & mask) * matrixSize;
+		const by = (y & mask) * matrixSize;
 		let carryR = 0, carryG = 0, carryB = 0;
+		const carryStrength = 0.6;
 		for (let x = 0; x < w; x++) {
 			const px = rowBase + x, srcIdx = px << 2;
 			if (data[srcIdx + 3] >= 128) {
-				const factor = normalize(matrix[my + (x & mask)]) - 0.5;
+				const factor = (bayerMatrix[by + (x & mask)] * invSizeSq) - 0.5;
 				const r = clamp(data[srcIdx]	 + carryR + factor * spread);
 				const g = clamp(data[srcIdx + 1] + carryG + factor * spread);
 				const b = clamp(data[srcIdx + 2] + carryB + factor * spread);
@@ -222,13 +221,41 @@ async function modeOrdered(data, w, h, rgbPalette, outData, onProgress, tmpTable
 	return { hexString: partialStr + "`", indexMap };
 }
 
-function modeBayer(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, bayerMatrix, matrixSize) {
-	const invSizeSq = 1 / (matrixSize * matrixSize);
-	return modeOrdered(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, bayerMatrix, matrixSize, (v) => v * invSizeSq, 72 /* was 48 */);
-}
-
-function modeBlueNoise(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, noiseMatrix, matrixSize) {
-	return modeOrdered(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, noiseMatrix, matrixSize, (v) => v / 255, 80 /* was 52 */);
+// ---- BLUE NOISE (enhanced with 1D error diffusion for smoother blending) ----
+async function modeBlueNoise(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, noiseMatrix, matrixSize) {
+	const indexMap = new Uint8Array(w * h);
+	const cache = new Map();
+	const mask = matrixSize - 1;
+	const inv255 = 1 / 255;
+	const spread = 80; // Increased from 52 for stronger dithering blend
+	let partialStr = "img`\n";
+	for (let y = 0; y < h; y++) {
+		const rowBase = y * w;
+		const ny = (y & mask) * matrixSize;
+		let carryR = 0, carryG = 0, carryB = 0;
+		const carryStrength = 0.6;
+		for (let x = 0; x < w; x++) {
+			const px = rowBase + x, srcIdx = px << 2;
+			if (data[srcIdx + 3] >= 128) {
+				const factor = (noiseMatrix[ny + (x & mask)] * inv255) - 0.5;
+				const r = clamp(data[srcIdx]	 + carryR + factor * spread);
+				const g = clamp(data[srcIdx + 1] + carryG + factor * spread);
+				const b = clamp(data[srcIdx + 2] + carryB + factor * spread);
+				indexMap[px] = cachedFindNearest(r, g, b, rgbPalette, cache);
+				const tc = rgbPalette[indexMap[px]];
+				carryR = (r - tc.r) * carryStrength;
+				carryG = (g - tc.g) * carryStrength;
+				carryB = (b - tc.b) * carryStrength;
+			} else {
+				carryR = carryG = carryB = 0;
+			}
+		}
+		partialStr += buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable);
+		if (y % progressInterval === 0 || y === h - 1) {
+			await onProgress(((y + 1) * 100 / h).toFixed(4));
+		}
+	}
+	return { hexString: partialStr + "`", indexMap };
 }
 
 // ---- FLOYD-STEINBERG ERROR DIFFUSION ----
