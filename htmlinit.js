@@ -1,6 +1,7 @@
 document.querySelector("body").insertAdjacentHTML('beforeend',`
 <!-- Loading Screen -->
 <div id="page-loader">
+	<h1>Convert Picture to Makecode-arcade or Pixel-art</h1>
 	<br>
 	<div class="loader-content">
 		<div class="loader-spinner"></div>
@@ -8,7 +9,6 @@ document.querySelector("body").insertAdjacentHTML('beforeend',`
 		<div class="loader-sub">Preparing Picture Converter Engine.</div>
 	</div>
 </div>
-<h1>Convert Picture to MakecodeArcade or PixelArt</h1>
 <div id="info">
 	<p>
 		Upload your image to convert it into pixel art — with optional ASCII

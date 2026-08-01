@@ -1,5 +1,5 @@
 /* style.css — Optimized with display: block/inline/inline-block/none as primary */
-*, *::before, *::after { box-sizing: border-box; }
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
 	--bg-color: #1a1b26;
@@ -23,8 +23,6 @@ body {
 	margin: 0 auto;
 	transition: background-color 0.3s ease, color 0.3s ease;
 }
-
-body > h1 { position: relative; z-index: 720; }
 
 body hr {
 	border-style: none;
@@ -52,6 +50,11 @@ input[disabled] { pointer-events: none; cursor: not-allowed; }
 	background: var(--bg-color);
 	z-index: 512;
 	transition: opacity 0.5s ease, visibility 0.5s ease;
+}
+
+#page-loader > h1 {
+	padding-left: 0.3572em;
+	padding-top: 0.3598em;
 }
 
 #page-loader > .loader-content {
@@ -298,8 +301,8 @@ input[disabled] { pointer-events: none; cursor: not-allowed; }
 .colorboard .colorpad .color-pair {
 	display: block;
 	float: left;
-	width: 31.33%;
-	margin: 1% 1% 1% 0;
+	width: 19.22%;
+	margin: 0.7% 0.7% 0.7% 0;
 	background: var(--panel-bg);
 	padding: 6px;
 	border-radius: 4px;
@@ -310,8 +313,10 @@ input[disabled] { pointer-events: none; cursor: not-allowed; }
 	padding: 0px;
 	border-radius: 0.3em;
 	width: 1.3em;
+	margin: 0;
 	margin-right: 5px;
 	border-style: solid;
+	vertical-align: middle;
 	display: inline-block;
 }
 
@@ -326,6 +331,7 @@ input[disabled] { pointer-events: none; cursor: not-allowed; }
 .colorboard .colorpad .color-pair .colortext {
 	display: inline-block;
 	margin: 0;
+	margin-top: 3.5px;
 	width: calc(100% - 75px);
 	font-size: 11px;
 	padding: 2px;
@@ -474,8 +480,9 @@ body > img:not(.show) {
 	background-color: var(--bg-color);
 	border: 1px solid var(--terminal-green);
 	color: var(--text-color);
+	margin-top: 0.5em;
 	margin-bottom: 1em;
-	padding: 5px 15px;
+	padding: 17.5px;
 	border-radius: 1.5em;
 	display: block;
 }
@@ -490,7 +497,6 @@ input[type="file"] {
 	border-radius: 0.3em;
 	margin-bottom: 15px;
 	width: 100%;
-	max-width: 400px;
 }
 
 .palette-loader-container {
@@ -751,9 +757,16 @@ input[type="file"] {
 	 RESPONSIVE LAYER (Float & Percentages only)
 	 ========================================================================== */
 
+@media (max-width: 1500px) {
+	.colorboard .colorpad .color-pair { width: 24.303%; }
+}
+
+@media (max-width: 1200px) {
+	.colorboard .colorpad .color-pair { width: 32.638%; }
+}
+
 @media (max-width: 960px) {
 	body { padding: 10px; }
-	#status { position: sticky; top: 10px; z-index: 100; }
 	.half, .colorboard {
 		float: none;
 		width: 100%;
@@ -761,8 +774,7 @@ input[type="file"] {
 		display: block;
 	}
 	.colorboard .colorpad .color-pair {
-		width: 31.33%;
-		margin: 1%;
+		width: 24.258%;
 		display: block;
 	}
 	.preview-box {
@@ -776,8 +788,7 @@ input[type="file"] {
 
 @media (max-width: 700px) {
 	.colorboard .colorpad .color-pair {
-		width: 31.33%;
-		margin: 6px 3px;
+		width: 32.634%;
 		display: block;
 	}
 	.action-buttons button {
@@ -794,7 +805,7 @@ input[type="file"] {
 }
 
 @media (max-width: 480px) {
-	.half { min-width: 300px; }
+	.half { min-width: 0; }
 	.colorboard .colorpad .color-pair {
 		width: 48%;
 		margin: 6px 3px;
