@@ -302,7 +302,7 @@ input[disabled] { pointer-events: none; cursor: not-allowed; }
 	display: block;
 	float: left;
 	width: 19.22%;
-	margin: 0.7% 0.7% 0.7% 0;
+	margin: 2px 0.375%;
 	background: var(--panel-bg);
 	padding: 6px;
 	border-radius: 4px;
@@ -758,11 +758,11 @@ input[type="file"] {
 	 ========================================================================== */
 
 @media (max-width: 1500px) {
-	.colorboard .colorpad .color-pair { width: 24.303%; }
+	.colorboard .colorpad .color-pair { width: 24.28%; margin: 2px 0.36%; }
 }
 
 @media (max-width: 1200px) {
-	.colorboard .colorpad .color-pair { width: 32.638%; }
+	.colorboard .colorpad .color-pair { width: 32.44%; margin: 2px 0.36%; }
 }
 
 @media (max-width: 960px) {
@@ -774,7 +774,8 @@ input[type="file"] {
 		display: block;
 	}
 	.colorboard .colorpad .color-pair {
-		width: 24.258%;
+		width: 24.48%;
+		margin: 3px 0.26%;
 		display: block;
 	}
 	.preview-box {
@@ -788,7 +789,8 @@ input[type="file"] {
 
 @media (max-width: 700px) {
 	.colorboard .colorpad .color-pair {
-		width: 32.634%;
+		width: 32.44%;
+		margin: 3px 0.4%;
 		display: block;
 	}
 	.action-buttons button {
@@ -807,8 +809,8 @@ input[type="file"] {
 @media (max-width: 480px) {
 	.half { min-width: 0; }
 	.colorboard .colorpad .color-pair {
-		width: 48%;
-		margin: 6px 3px;
+		width: 48.7%;
+		margin: 3px 0.58%;
 		display: block;
 	}
 	.size-settings-grid label:not(.full-row) { width: 48%; }
