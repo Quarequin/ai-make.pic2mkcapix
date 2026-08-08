@@ -15,7 +15,7 @@ document.querySelector("body").insertAdjacentHTML('beforeend',`
 		output and a fully customizable dynamic color palette.
 	</p>
 	<p>
-	please note: this page use ai to make project but you can fork this to make as human code sorry. :(
+		please note: this page use ai to make project but you can fork this to make as human code sorry. :(
 	</p>
 	<p>
 		note: 15 palette colors for makecode arcade compatibility.
