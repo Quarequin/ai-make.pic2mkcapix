@@ -53,6 +53,7 @@ input[disabled] { pointer-events: none; cursor: not-allowed; }
 }
 
 #page-loader > h1 {
+	margin: 0; padding: 0;
 	padding-left: 0.5248em;
 	padding-top: 0.51em;
 }
@@ -767,8 +768,8 @@ input[type="file"] {
 
 @media (max-width: 960px) {
 	body { padding: 10px; }
-	#page-loader { width: 100%; height: 128%; }
-	#page-loader > h1 { padding-left: 0.3572em; padding-top: 0.3598em; }
+	#page-loader { width: 100%; height: 128%; padding: 10px; }
+	#page-loader > h1 { margin-left: -0.52em; margin-top: -0.5em; }
 	.half, .colorboard {
 		float: none;
 		width: 100%;

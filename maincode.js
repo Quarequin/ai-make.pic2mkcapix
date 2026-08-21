@@ -14,7 +14,7 @@ let animFrames = [];
 let currentFrameIndex = 0;
 let isAnimating = false;
 function isValidHexRGB(val) {
-	return (/^#[0-9A-Fa-f]{3,4}$/.test(val)||/^#[0-9A-Fa-f]{6}$/.test(val)||/^#[0-9A-Fa-f]{8}$/.test(val))
+	return (/^#[0-9A-Fa-f]{8}$/.test(val)||/^#[0-9A-Fa-f]{6}$/.test(val)||/^#[0-9A-Fa-f]{3,4}$/.test(val))
 }
 // Shared hex -> {r,g,b,a} parser (0-255 each). Correctly expands 3/4-digit
 // shorthand by duplicating each nibble (per CSS shorthand-color spec) instead
@@ -417,7 +417,7 @@ paletteFileInput.addEventListener("change", function (e) {
 			const colorsFound = [];
 			evt.target.result.split(/\r?\n/).forEach((line) => {
 				const clean = line.trim().replace(/;.*$/, "").trim();
-				const match = clean.match(/#?([0-9A-Fa-f]{3,4})/)||clean.match(/#?([0-9A-Fa-f]{6})/)||clean.match(/#?([0-9A-Fa-f]{8})/);
+				const match = clean.match(/#?([0-9A-Fa-f]{8})/)||clean.match(/#?([0-9A-Fa-f]{6})/)||clean.match(/#?([0-9A-Fa-f]{3,4})/);
 				if (match) colorsFound.push("#" + match[1].toLowerCase());
 			});
 			if (colorsFound.length > 0) {
