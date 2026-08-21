@@ -45,17 +45,12 @@ input[disabled] { pointer-events: none; cursor: not-allowed; }
 	position: fixed;
 	top: 0;
 	left: 0;
-	width: 128%;
-	height: 128%;
+	width: 100%;
+	height: 100%;
+	padding: 15px;
 	background: var(--bg-color);
 	z-index: 512;
 	transition: opacity 0.5s ease, visibility 0.5s ease;
-}
-
-#page-loader > h1 {
-	margin: 0; padding: 0;
-	padding-left: 0.5248em;
-	padding-top: 0.51em;
 }
 
 #page-loader > .loader-content {
@@ -768,8 +763,7 @@ input[type="file"] {
 
 @media (max-width: 960px) {
 	body { padding: 10px; }
-	#page-loader { width: 100%; height: 128%; padding: 10px; }
-	#page-loader > h1 { margin-left: -0.52em; margin-top: -0.5em; }
+	#page-loader { width: 100%; height: 100%; padding: 10px; }
 	.half, .colorboard {
 		float: none;
 		width: 100%;
