@@ -80,7 +80,7 @@ document.querySelector("body").insertAdjacentHTML('beforeend',`
 				<input
 					type="number"
 					id="factor"
-					value="0.25"
+					value=""
 					step="0.1e-9"
 					min="0.1e-9"
 					max="8"
@@ -103,7 +103,7 @@ document.querySelector("body").insertAdjacentHTML('beforeend',`
 				<input
 					type="number"
 					id="width"
-					value="160"
+					value=""
 					disabled
 					class="custom"
 				>
@@ -111,7 +111,7 @@ document.querySelector("body").insertAdjacentHTML('beforeend',`
 				<input
 					type="number"
 					id="height"
-					value="120"
+					value=""
 					disabled
 					class="custom"
 				>
@@ -225,7 +225,7 @@ document.querySelector("body").insertAdjacentHTML('beforeend',`
 		<div class="colorboard">
 			<div class="palette-loader-container">
 				<label for="predefined-palette-select"
-					>Select Predefined Arcade Palette:</label
+					>Select Predefined Palette:</label
 				>
 				<select
 					id="predefined-palette-select"
