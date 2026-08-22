@@ -159,6 +159,8 @@ let rgbPalette = [];
 let uploadedFileBuffer = null;
 let isTextProcessing = false;
 let stopTextProcessingFlag = false;
+let curResizeMode = "=";
+let nextResizeMode = "-"
 
 // ---- OUTPUT TABS ----
 document.querySelectorAll(".tab-btn").forEach((btn) => {
@@ -620,27 +622,37 @@ function updateCalculatedDimensions() {
 		inputFactor.disabled = factored;
 	}
 	if (document.getElementById("original-size").checked) {
-		inputWidth.value = Math.round(originalImageSize.width);
-		inputHeight.value = Math.round(originalImageSize.height);
-		disableImageSizeProp(true, true);
+		nextResizeMode = "original-size"
+		if (nextResizeMode !== curResizeMode) inputFactor.value = 1;
+		const f = parseFloat(inputFactor.value) || 0.1;
+		inputWidth.value = Math.round(originalImageSize.width * f);
+		inputHeight.value = Math.round(originalImageSize.height * f);
+		disableImageSizeProp(true, false);
 	} else if (document.getElementById("full-width").checked) {
+		nextResizeMode = "full-width"
+		if (nextResizeMode !== curResizeMode) inputFactor.value = 0;
 		inputWidth.value = 160;
 		inputHeight.value = Math.round(
 			originalImageSize.height * (160 / originalImageSize.width),
 		);
-		disableImageSizeProp(true, false);
+		disableImageSizeProp(true, true);
 	} else if (document.getElementById("full-height").checked) {
+		nextResizeMode = "full-height"
+		if (nextResizeMode !== curResizeMode) inputFactor.value = 0;
 		inputHeight.value = 120;
 		inputWidth.value = Math.round(
 			originalImageSize.width * (120 / originalImageSize.height),
 		);
-		disableImageSizeProp(true, false);
+		disableImageSizeProp(true, true);
 	} else if (document.getElementById("scale").checked) {
+		nextResizeMode = "scale"
+		if (nextResizeMode !== curResizeMode) inputFactor.value = 0.25;
 		const f = parseFloat(inputFactor.value) || 0.1;
 		inputWidth.value = Math.round(originalImageSize.width * f);
 		inputHeight.value = Math.round(originalImageSize.height * f);
 		disableImageSizeProp(false, false);
 	}
+	curResizeMode = nextResizeMode;
 	document.getElementById("canvas-res").textContent =
 		`Size: ${inputWidth.value} x ${inputHeight.value} px`;
 }
