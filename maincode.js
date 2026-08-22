@@ -614,20 +614,32 @@ function updateCalculatedDimensions() {
 		)
 	)
 		return;
-	if (document.getElementById("full-width").checked) {
+	const disableImageSizeProp = (sized, factored) => {
+		inputWidth.disabled = sized;
+		inputHeight.disabled = sized;
+		inputFactor.disabled = factored;
+	}
+	if (document.getElementById("original-size").checked) {
+		inputWidth.value = Math.round(originalImageSize.width);
+		inputHeight.value = Math.round(originalImageSize.height);
+		disableImageSizeProp(true, false);
+	} else if (document.getElementById("full-width").checked) {
 		inputWidth.value = 160;
 		inputHeight.value = Math.round(
 			originalImageSize.height * (160 / originalImageSize.width),
 		);
+		disableImageSizeProp(true, false);
 	} else if (document.getElementById("full-height").checked) {
 		inputHeight.value = 120;
 		inputWidth.value = Math.round(
 			originalImageSize.width * (120 / originalImageSize.height),
 		);
+		disableImageSizeProp(true, false);
 	} else if (document.getElementById("scale").checked) {
 		const f = parseFloat(inputFactor.value) || 0.1;
 		inputWidth.value = Math.round(originalImageSize.width * f);
 		inputHeight.value = Math.round(originalImageSize.height * f);
+		disableImageSizeProp(false, false);
 	}
 	document.getElementById("canvas-res").textContent =
 		`Size: ${inputWidth.value} x ${inputHeight.value} px`;

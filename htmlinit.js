@@ -11,15 +11,20 @@ document.querySelector("body").insertAdjacentHTML('beforeend',`
 </div>
 <div id="info">
 	<p>
-		Upload your image to convert it into pixel art — with optional ASCII
+		Upload your image to convert it into pixel art — with optional ASCII 
 		output and a fully customizable dynamic color palette.
 	</p>
-	<p>
-		please note: this page use ai to make project but you can fork this to make as human code sorry. :(
-	</p>
-	<p>
-		note: 15 palette colors for makecode arcade compatibility.
-	</p>
+	<hr>
+	<dl>
+		<dt>note for makecode arcade user:</dt>
+		<dd>
+			15 palette colors for <i>makecode arcade</i> compatibility.
+		</dd>
+		<dt>note for anti-ai user:</dt>
+		<dd>
+			this page use <i>ai</i> to make project but you can fork this to make as human code sorry.
+		</dd>
+	</dl>
 </div>
 
 <div id="status">System Status: Awaiting Image Upload Asset...</div>
@@ -38,8 +43,17 @@ document.querySelector("body").insertAdjacentHTML('beforeend',`
 					><input
 						type="radio"
 						name="resize"
-						id="full-width"
+						id="original-size"
 						checked
+						disabled
+					>
+					Original Size</label
+				>
+				<label class="full-row"
+					><input
+						type="radio"
+						name="resize"
+						id="full-width"
 						disabled
 					>
 					Fix Sprite Width (160px)</label
@@ -54,8 +68,13 @@ document.querySelector("body").insertAdjacentHTML('beforeend',`
 					Fix Sprite Height (120px)</label
 				>
 				<label class="full-row"
-					><input type="radio" name="resize" id="scale" disabled >
-					Custom Scale Factor</label
+					><input
+						type="radio"
+						name="resize"
+						id="scale"
+						disabled
+					>
+					Custom Size</label
 				>
 				<label style="padding-left: 20px">Scale Factor:</label>
 				<input

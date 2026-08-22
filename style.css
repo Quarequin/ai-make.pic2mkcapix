@@ -195,6 +195,10 @@ input[disabled] { pointer-events: none; cursor: not-allowed; }
 	font-family: var(--main-mono-font);
 }
 
+.size-settings-grid input[type="number"]:disabled {
+	border-bottom-style: dashed;
+}
+
 .dropdown-selection-group {
 	padding: 12px;
 	border: 1px dashed var(--border-color);
@@ -375,9 +379,6 @@ div.tab-panel textarea {
 	border-radius: 0.3em;
 	display: inline-block;
 	font-weight: bold;
-}
-
-#status {
 	position: sticky;
 	top: 10px;
 	z-index: 100;
@@ -476,12 +477,19 @@ body > img:not(.show) {
 	background-color: var(--bg-color);
 	border: 1px solid var(--terminal-green);
 	color: var(--text-color);
-	margin-top: 0.5em;
+	margin-top: -0.5em;
 	margin-bottom: 1em;
-	padding: 17.5px;
+	padding: 15px;
 	border-radius: 1.5em;
 	display: block;
 }
+
+#info * { margin-bottom: 5px; margin-top: 5px; }
+#info *:first-child { margin-top: 0; }
+#info *:last-child { margin-bottom: 0; }
+
+#info dl dd:not(:last-child) { margin-bottom: 10px; }
+#info dl dd { margin-left: 10px; }
 
 input[type="file"] {
 	background-color: var(--bg-color);

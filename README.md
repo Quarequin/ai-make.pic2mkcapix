@@ -4,4 +4,5 @@ download offline at [here](https://github.com/Quarequin/ai-make.convert-picture-
 
 download source at [here](https://github.com/Quarequin/ai-make.convert-picture-2-makecodearcade-or-pixelart/raw/refs/heads/main/pack/IM2MKCAS.zip)
 
-> please note: this project use ai to make project but you can fork this to make as human code sorry. \:\(
+> note for anti-ai user:
+> this project use *ai* to make project but you can fork this to make as human code sorry. \:\(
