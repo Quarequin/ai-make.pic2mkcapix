@@ -622,7 +622,7 @@ function updateCalculatedDimensions() {
 	if (document.getElementById("original-size").checked) {
 		inputWidth.value = Math.round(originalImageSize.width);
 		inputHeight.value = Math.round(originalImageSize.height);
-		disableImageSizeProp(true, false);
+		disableImageSizeProp(true, true);
 	} else if (document.getElementById("full-width").checked) {
 		inputWidth.value = 160;
 		inputHeight.value = Math.round(
