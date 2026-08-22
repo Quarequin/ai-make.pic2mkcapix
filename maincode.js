@@ -12,7 +12,7 @@ let lastW = 0,
 	lastH = 0;
 let animFrames = [];
 let currentFrameIndex = 0;
-let isAnimating = false;
+let processedAnimation = null;
 function isValidHexRGB(val) {
 	return (/^#[0-9A-Fa-f]{8}$/.test(val)||/^#[0-9A-Fa-f]{6}$/.test(val)||/^#[0-9A-Fa-f]{3,4}$/.test(val))
 }
@@ -51,47 +51,6 @@ function addToSessionLog(type, message, detail) {
 }
 
 addToSessionLog("SYSTEM", "Application initialized successfully.");
-
-window.addEventListener("error", function (e) {
-	const stackTrace = e.error ? e.error.stack : "No call stack available.";
-	addToSessionLog("CRITICAL_ERROR", e.message, stackTrace);
-	displayErrorPopup("Uncaught Runtime Exception", e.message, stackTrace);
-});
-
-function displayErrorPopup(type, message, stack) {
-	document.getElementById("popup-err-type").textContent = type;
-	document.getElementById("popup-err-message").textContent = message;
-	document.getElementById("popup-err-stack").textContent =
-		stack || "No call stack trace records.";
-	const logPanel = document.getElementById("popup-err-stack");
-	const toggleBtn = document.getElementById("btn-toggle-log");
-	logPanel.style.display = "none";
-	toggleBtn.textContent = "Show Full Log ▼";
-	document.getElementById("notification-popup-overlay").style.display =
-		"block";
-}
-
-function toggleErrorLog() {
-	const logPanel = document.getElementById("popup-err-stack");
-	const toggleBtn = document.getElementById("btn-toggle-log");
-	const isHidden =
-		logPanel.style.display === "none" || logPanel.style.display === "";
-	logPanel.style.display = isHidden ? "block" : "none";
-	toggleBtn.textContent = isHidden ? "Hide Full Log ▲" : "Show Full Log ▼";
-}
-
-function closeErrorPopup() {
-	if (!loaded) window.location.reload();
-	document.getElementById("notification-popup-overlay").style.display =
-		"none";
-}
-
-document
-	.getElementById("popup-close-btn")
-	.addEventListener("click", closeErrorPopup);
-document
-	.getElementById("btn-toggle-log")
-	.addEventListener("click", toggleErrorLog);
 
 // ---- WEBGL 2.0 DETECTION ----
 function detectWebGL() {
@@ -148,7 +107,7 @@ const predefinedFileMediaType = {
 	"image/png":"png","image/jpeg":"jpeg","image/jpg":"jpg",
 	"image/jpe":"jpe","image/jxl":"jxl","image/bmp":"bmp",
 	"image/gif":"gif","image/webp":"webp","image/apng":"apng",
-	"vedio/webm":"webm"
+	"video/webm":"webm"
 };
 
 let originalImageSize = { width: 0, height: 0 };
@@ -236,21 +195,16 @@ engineSelect.addEventListener("change", function () {
 });
 
 // ---- BUTTON STATE ----
+const BUTTON_STATES = Object.freeze({
+	noImage: { run: true, copy: true, dl: true, copyText: "Copy to Clipboard", text: "Convert Image" },
+	imageLoaded: { run: false, copy: true, dl: true, copyText: "Copy to Clipboard", text: "Convert Image" },
+	processing: { run: true, copy: true, dl: true, copyText: "Copy to Clipboard", text: "Converting..." },
+	almost: { run: true, copy: false, dl: false, copyText: "Stop Processing", text: "Almost There..." },
+	done: { run: false, copy: false, dl: false, copyText: "Copy to Clipboard", text: "Convert Image" },
+});
+
 function setButtonState(state) {
-	const states = {
-		noImage: { run: true, copy: true, dl: true, copyText: "Copy to Clipboard", text: "Convert Image" },
-		imageLoaded: {
-			run: false,
-			copy: true,
-			dl: true,
-			copyText: "Copy to Clipboard",
-			text: "Convert Image",
-		},
-		processing: { run: true, copy: true, dl: true, copyText: "Copy to Clipboard", text: "Converting..." },
-		almost: { run: true, copy: false, dl: false, copyText: "Stop Processing", text: "Almost There..." },
-		done: { run: false, copy: false, dl: false, copyText: "Copy to Clipboard", text: "Convert Image" },
-	};
-	const current = states[state] || states.noImage;
+	const current = BUTTON_STATES[state] || BUTTON_STATES.noImage;
 	runButton.disabled = current.run;
 	copyButton.disabled = current.copy;
 	downloadButton.disabled = current.dl;
@@ -275,6 +229,31 @@ function updatePaletteCountLabel() {
 function makeCustomPaletteLabel() {
 	predefinedPaletteSelect.querySelector('option[value="custom"]').classList.remove("hidden");
 	predefinedPaletteSelect.value = "custom";
+}
+
+function createPalettePair(index, value = '#888888') {
+	const pair = document.createElement('div');
+	pair.className = 'color-pair';
+	const label = document.createElement('label');
+	const picker = document.createElement('input');
+	const text = document.createElement('input');
+	label.textContent = `Color ${index + 1}`;
+	picker.type = 'color';
+	picker.value = hexRgbOnly(value);
+	text.type = 'text';
+	text.className = 'colortext';
+	text.value = value;
+	pair.append(label, picker, text);
+	colorpad.appendChild(pair);
+	bindColorPairEvents(pair, index);
+	return pair;
+}
+
+function syncPaletteSize(targetCount) {
+	const count = Math.max(MIN_PALETTE_SLOTS, Math.min(MAX_PALETTE_SLOTS, targetCount));
+	while (colorpad.querySelectorAll('.color-pair').length > count) colorpad.lastElementChild.remove();
+	while (colorpad.querySelectorAll('.color-pair').length < count) createPalettePair(colorpad.querySelectorAll('.color-pair').length);
+	reindexColorPairs();
 }
 
 function bindColorPairEvents(pair, idx) {
@@ -342,17 +321,13 @@ colorpad.querySelectorAll(".color-pair").forEach((pair, idx) => {
 });
 updatePaletteCountLabel();
 
-paletteAddBtn.addEventListener("click", function () {
-	const currentCount = colorpad.querySelectorAll(".color-pair").length;
-	if (currentCount >= MAX_PALETTE_SLOTS) return;
-	const newPair = document.createElement("div");
-	newPair.className = "color-pair";
-	newPair.innerHTML = `<label>Color ${currentCount + 1}</label><input type="color" value="#888888" /><input type="text" class="colortext" value="#888888" />`;
-	colorpad.appendChild(newPair);
-	bindColorPairEvents(newPair, currentCount);
+paletteAddBtn.addEventListener('click', function () {
+	const count = colorpad.querySelectorAll('.color-pair').length;
+	if (count >= MAX_PALETTE_SLOTS) return;
+	createPalettePair(count);
 	reindexColorPairs();
 	makeCustomPaletteLabel();
-	addToSessionLog("PALETTE", `Added color slot ${currentCount + 1}.`);
+	addToSessionLog('PALETTE', `Added color slot ${count + 1}.`);
 });
 
 paletteRemoveBtn.addEventListener("click", function () {
@@ -373,22 +348,7 @@ predefinedPaletteSelect.addEventListener("change", function () {
 	const colors = predefinedPalettes[this.value];
 	if (!colors) return;
 	const targetCount = colors.length;
-	while (colorpad.querySelectorAll(".color-pair").length > targetCount) {
-		const pairs = colorpad.querySelectorAll(".color-pair");
-		if (pairs.length <= MIN_PALETTE_SLOTS) break;
-		colorpad.removeChild(pairs[pairs.length - 1]);
-	}
-	while (
-		colorpad.querySelectorAll(".color-pair").length < targetCount &&
-		colorpad.querySelectorAll(".color-pair").length < MAX_PALETTE_SLOTS
-	) {
-		const count = colorpad.querySelectorAll(".color-pair").length;
-		const newPair = document.createElement("div");
-		newPair.className = "color-pair";
-		newPair.innerHTML = `<label>Color ${count + 1}</label><input type="color" value="#888888" /><input type="text" class="colortext" value="#888888" />`;
-		colorpad.appendChild(newPair);
-		bindColorPairEvents(newPair, count);
-	}
+	syncPaletteSize(targetCount);
 	colorpad.querySelectorAll(".color-pair").forEach((pair, i) => {
 		if (colors[i]) {
 			pair.querySelector('input[type="color"]').value = hexRgbOnly(colors[i]);
@@ -423,26 +383,7 @@ paletteFileInput.addEventListener("change", function (e) {
 				if (match) colorsFound.push("#" + match[1].toLowerCase());
 			});
 			if (colorsFound.length > 0) {
-				while (
-					colorpad.querySelectorAll(".color-pair").length >
-					colorsFound.length
-				) {
-					const pairs = colorpad.querySelectorAll(".color-pair");
-					if (pairs.length <= MIN_PALETTE_SLOTS) break;
-					colorpad.removeChild(pairs[pairs.length - 1]);
-				}
-				while (
-					colorpad.querySelectorAll(".color-pair").length <
-						colorsFound.length
-				) {
-					const count = colorpad.querySelectorAll(".color-pair").length;
-					if (count >= MAX_PALETTE_SLOTS) break;
-					const newPair = document.createElement("div");
-					newPair.className = "color-pair";
-					newPair.innerHTML = `<label>Color ${count + 1}</label><input type="color" value="#888888" /><input type="text" class="colortext" value="#888888" />`;
-					colorpad.appendChild(newPair);
-					bindColorPairEvents(newPair, count);
-				}
+				syncPaletteSize(colorsFound.length);
 				colorpad.querySelectorAll(".color-pair").forEach((pair, i) => {
 					if (colorsFound[i]) {
 						pair.querySelector('input[type="color"]').value =
@@ -501,112 +442,75 @@ function parseCurrentPalette() {
 // ============================================================
 //  IMAGE / ANIMATION LOAD
 // ============================================================
-fileInput.addEventListener("change", async function () {
-	textarea.value = "";
-	asciiOutputTA.value = "";
+function resetLoadedState() {
+	textarea.value = '';
+	asciiOutputTA.value = '';
 	lastIndexMap = null;
 	animFrames = [];
-	currentFrameIndex = 0;
-	isAnimating = false;
+	processedAnimation = null;
+	uploadedFileBuffer = null;
+	setButtonState('noImage');
+}
 
+function showLoadedPreview(preview, width, height, frameCount = 0) {
+	if (previewContainer) previewContainer.style.display = 'block';
+	document.getElementById('original-res').textContent = `Size: ${width} x ${height} px${frameCount ? ` | Frames: ${frameCount}` : ''}`;
+	document.getElementById('original-preview-zone').replaceChildren(preview);
+	document.querySelectorAll('input[disabled]').forEach((element) => element.removeAttribute('disabled'));
+	originalImageSize = { width, height };
+	setButtonState('imageLoaded');
+	updateCalculatedDimensions();
+}
+
+function sourceMime(file) {
+	const extension = file.name.toLowerCase().split('.').pop();
+	const byExtension = { gif: 'image/gif', apng: 'image/apng', png: 'image/png', webp: 'image/webp', jpg: 'image/jpeg', jpeg: 'image/jpeg', jpe: 'image/jpeg', bmp: 'image/bmp', jxl: 'image/jxl', webm: 'video/webm' };
+	return file.type || byExtension[extension] || '';
+}
+
+fileInput.addEventListener('change', async function () {
+	resetLoadedState();
 	const file = fileInput.files[0];
-	if (!file || (file && !predefinedFileMediaType[file.type])) {
-		if (file) statusDiv.textContent = `Invalid: ${file.name} is not image file,
-		try selecting image file like .png,.jpg,.bmp,.gif,etc.`;
-		else statusDiv.textContent = `Invalid: No image file.
-		try selecting image file like .png,.jpg,.bmp,.gif,etc.`;
-		return setButtonState("noImage");
-	}
-
-	originalMimeType = file.type || "image/png";
-	const lastDotIdx = file.name.lastIndexOf(".");
-	canvasLastName =
-		lastDotIdx !== -1 ? file.name.substring(lastDotIdx) : ".png";
-	//if (canvasLastName.toLowerCase() === ".gif") canvasLastName = ".png";
-
-	// Check if animated format
-	if (isAnimatedFormat(originalMimeType)) {
-		try {
-			const buffer = await file.arrayBuffer();
-			uploadedFileBuffer = buffer;
-			animFrames = await decodeAnimation(buffer, originalMimeType);
-			if (animFrames.length > 0) {
-				const firstFrame = animFrames[0];
-				originalImageSize = {
-					width: firstFrame.width,
-					height: firstFrame.height,
-				};
-				if (previewContainer) previewContainer.style.display = "block";
-				document.getElementById("original-res").textContent =
-					`Size: ${firstFrame.width} x ${firstFrame.height} px | Frames: ${animFrames.length}`;
-				const zone = document.getElementById("original-preview-zone");
-				zone.innerHTML = "";
-				zone.appendChild(firstFrame.image);
-				document
-					.querySelectorAll("input[disabled]")
-					.forEach((el) => el.removeAttribute("disabled"));
-				setButtonState("imageLoaded");
-				updateCalculatedDimensions();
-				statusDiv.textContent = `Ready: ${file.name} Loaded (${animFrames.length} frames).`;
-				addToSessionLog(
-					"ANIM",
-					`Loaded animated ${originalMimeType} with ${animFrames.length} frames.`,
-				);
-				canvas.width = inputWidth.value;
-				canvas.height = inputHeight.value;
-			}
-		} catch (animErr) {
-			displayErrorPopup(
-				"Animation Decode Error",
-				animErr.message,
-				animErr.stack,
-			);
-			setButtonState("noImage");
-		}
+	if (!file) {
+		statusDiv.textContent = 'Invalid: No image file. Try selecting an image such as PNG, JPG, GIF, APNG, WebP, or WebM.';
 		return;
 	}
-
-	// Static image
-	const reader = new FileReader();
-	reader.onerror = () =>
-		displayErrorPopup(
-			"Image File IO Exception",
-			"An error occurred while loading the source image file.",
-			reader.error ? reader.error.message : "Unknown fault.",
-		);
-	reader.onload = function (e) {
-		const img = new Image();
-		img.onerror = () => {
-			statusDiv.textContent = "Error: Failed to decode image asset.";
-			displayErrorPopup(
-				"Image Decoding Exception",
-				"Unable to convert this file data into a complete image.",
-				"The file may be corrupted.",
-			);
-		};
-		img.onload = () => {
-			if (previewContainer) previewContainer.style.display = "block";
-			originalImageSize = {
-				width: img.naturalWidth,
-				height: img.naturalHeight,
+	const mime = sourceMime(file);
+	if (!/^image\//.test(mime) && mime !== 'video/webm') {
+		statusDiv.textContent = `Invalid: ${file.name} is not a supported image or WebM file.`;
+		return;
+	}
+	originalMimeType = mime;
+	canvasLastName = isAnimatedFormat(mime) || mime === 'video/webm' ? '.gif' : '.png';
+	uploadedFileBuffer = await file.arrayBuffer();
+	try {
+		const animated = isAnimatedFormat(mime) || isAnimatedBuffer(uploadedFileBuffer, mime);
+		if (animated) {
+			animFrames = await decodeAnimation(uploadedFileBuffer, mime);
+			if (!animFrames.length) throw new Error('No decodable animation frames were found.');
+			const first = animFrames[0];
+			showLoadedPreview(first.image, first.width, first.height, animFrames.length);
+			statusDiv.textContent = `Ready: ${file.name} Loaded (${animFrames.length} frame${animFrames.length === 1 ? '' : 's'}).`;
+			addToSessionLog('ANIM', `Loaded ${mime} with ${animFrames.length} composited frame(s).`);
+		} else {
+			const url = URL.createObjectURL(file);
+			const image = new Image();
+			image.onload = () => {
+				URL.revokeObjectURL(url);
+				showLoadedPreview(image, image.naturalWidth, image.naturalHeight);
+				statusDiv.textContent = `Ready: ${file.name} Loaded Successfully.`;
+				addToSessionLog('IMAGE', `Loaded ${mime} source image.`);
 			};
-			document.getElementById("original-res").textContent =
-				`Size: ${img.naturalWidth} x ${img.naturalHeight} px`;
-			const zone = document.getElementById("original-preview-zone");
-			zone.innerHTML = "";
-			zone.appendChild(img);
-			document
-				.querySelectorAll("input[disabled]")
-				.forEach((el) => el.removeAttribute("disabled"));
-			setButtonState("imageLoaded");
-			updateCalculatedDimensions();
-			statusDiv.textContent = `Ready: ${file.name} Loaded Successfully.`;
-			canvas.width = inputWidth.value;
-			canvas.height = inputHeight.value;
-		};
-		img.src = e.target.result;
-	};
-	reader.readAsDataURL(file);
+			image.onerror = () => {
+				URL.revokeObjectURL(url);
+				displayErrorPopup('Image Decoding Exception', 'Unable to decode this image file.', 'The file may be corrupted or unsupported.');
+			};
+			image.src = url;
+		}
+	} catch (error) {
+		displayErrorPopup('Animation Decode Error', error.message, error.stack);
+		resetLoadedState();
+	}
 });
 
 function updateCalculatedDimensions() {
@@ -696,10 +600,9 @@ parametersForm.addEventListener("submit", async function (e) {
 		);
 		if (!img) return;
 
-		canvasName = `pic2pa.${new Date()
-			.toISOString()
-			.replace(/:/g, "-")
-			.replace(/\.\d{3}/, "")}${canvasLastName}`;
+		const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+		canvasName = `pic2pa-${timestamp}${animFrames.length ? '.gif' : '.png'}`;
+		processedAnimation = null;
 		parseCurrentPalette();
 
 		const w = parseInt(inputWidth.value) || 16;
@@ -759,7 +662,7 @@ parametersForm.addEventListener("submit", async function (e) {
 			});
 			ctx.putImageData(outImgData, 0, 0);
 		} else {
-			result = await runCPUPipelineFallback(imgData, w, h, outImgData);
+			result = await runCPUPipelineFallback(imgData, w, h, outImgData, hasAlpha);
 		}
 		setButtonState("almost");
 
@@ -836,48 +739,43 @@ async function progressiveTextOutput(fullString, progressInterval) {
 	copyButton.textContent = "Copy to Clipboard";
 }
 
-// Process animation frames
 async function processAnimation(w, h) {
 	const allResults = [];
-	const totalFrames = animFrames.length;
+	const outputFrames = [];
 	const engine = engineSelect.value;
-
-	for (let f = 0; f < totalFrames; f++) {
-		const frame = animFrames[f];
-		ctx.globalCompositeOperation = "copy";
+	for (let index = 0; index < animFrames.length; index += 1) {
+		const frame = animFrames[index];
+		ctx.globalCompositeOperation = 'copy';
 		ctx.clearRect(0, 0, w, h);
 		ctx.drawImage(frame.image, 0, 0, w, h);
-		ctx.globalCompositeOperation = "source-over";
+		ctx.globalCompositeOperation = 'source-over';
 		const imgData = ctx.getImageData(0, 0, w, h);
 		const outImgData = ctx.createImageData(w, h);
-
-		let result;
 		const hasAlpha = imageDataHasAlpha(imgData.data);
-		if (engine === "gpu") {
-			result = await runGLPipeline({
-				canvas,
-				data: imgData.data,
-				w,
-				h,
-				mode: modeSelect.value,
-				rgbPalette,
-				outImgData,
-				hasAlpha,
-				onProgress: async () => {},
-			});
-		} else {
-			result = await runCPUPipelineFallback(imgData, w, h, outImgData);
-		}
+		const result = engine === 'gpu'
+			? await runGLPipeline({ canvas, data: imgData.data, w, h, mode: modeSelect.value, rgbPalette, outImgData, hasAlpha, onProgress: async () => {} })
+			: await runCPUPipelineFallback(imgData, w, h, outImgData, hasAlpha);
 		allResults.push(result.hexString);
-		runButton.textContent = `Converting frame ${f + 1}/${totalFrames}...`;
-		statusDiv.textContent = `Processing frame ${f + 1} of ${totalFrames}...`;
-		await new Promise((r) => requestAnimationFrame(r));
+		outputFrames.push({
+			indexMap: new Uint8Array(result.indexMap),
+			delay: frame.delay,
+			width: w,
+			height: h,
+		});
+		ctx.putImageData(outImgData, 0, 0);
+		runButton.textContent = `Converting frame ${index + 1}/${animFrames.length}...`;
+		statusDiv.textContent = `Processing frame ${index + 1} of ${animFrames.length}...`;
+		await new Promise((resolve) => requestAnimationFrame(resolve));
 	}
-	setButtonState("almost");
-
-	// Combine all frames
-	const combined = "[\n" + allResults.join(",\n") + "\n]";
-	await progressiveTextOutput(combined);
+	processedAnimation = {
+		mimeType: 'image/gif',
+		width: w,
+		height: h,
+		frames: outputFrames,
+		repeat: animFrames.repeat ?? 0,
+	};
+	setButtonState('almost');
+	await progressiveTextOutput(`[\n${allResults.join(',\n')}\n]`);
 }
 
 // True if any pixel in this ImageData has partial/zero alpha — i.e. the
@@ -890,8 +788,8 @@ function imageDataHasAlpha(data) {
 	return false;
 }
 
-async function runCPUPipelineFallback(imgData, w, h, outImgData) {
-	return await runConversionPipeline({
+async function runCPUPipelineFallback(imgData, w, h, outImgData, hasAlpha = imageDataHasAlpha(imgData.data)) {
+	return runConversionPipeline({
 		data: imgData.data,
 		w,
 		h,
@@ -899,7 +797,7 @@ async function runCPUPipelineFallback(imgData, w, h, outImgData) {
 		subPixelOption: subpixelSelect.value,
 		rgbPalette,
 		outImgData,
-		hasAlpha: imageDataHasAlpha(imgData.data),
+		hasAlpha,
 		onProgress: async (progressPercent) => {
 			ctx.putImageData(outImgData, 0, 0);
 			runButton.textContent = `Converting... ${progressPercent}%`;
@@ -935,23 +833,115 @@ copyButton.addEventListener("click", function (e) {
 });
 
 // ---- DOWNLOAD BUTTON ----
-downloadButton.addEventListener("click", function (e) {
+function writeGifWord(bytes, value) {
+	bytes.push(value & 255, (value >> 8) & 255);
+}
+
+function encodeGifLzw(indices, minimumCodeSize) {
+	// Emit literal palette indices with a clear code before each index. This
+	// deliberately keeps the code width constant and avoids malformed streams
+	// caused by encoder/decoder dictionary-width drift on large frames.
+	const clear = 1 << minimumCodeSize;
+	const end = clear + 1;
+	const codeSize = minimumCodeSize + 1;
+	let bitBuffer = 0;
+	let bitCount = 0;
+	const output = [];
+	const writeCode = (code) => {
+		bitBuffer |= code << bitCount;
+		bitCount += codeSize;
+		while (bitCount >= 8) {
+			output.push(bitBuffer & 255);
+			bitBuffer >>= 8;
+			bitCount -= 8;
+		}
+	};
+	writeCode(clear);
+	for (const index of indices) {
+		writeCode(index);
+		writeCode(clear);
+	}
+	writeCode(end);
+	if (bitCount) output.push(bitBuffer & 255);
+	return output;
+}
+
+function paletteIndexData(frame, palette) {
+	const indices = new Uint8Array(frame.width * frame.height);
+	const cache = new Map();
+	for (let pixel = 0; pixel < indices.length; pixel += 1) {
+		const offset = pixel * 4;
+		if (frame.data[offset + 3] < 128) {
+			indices[pixel] = 0;
+			continue;
+		}
+		const key = (frame.data[offset] << 16) | (frame.data[offset + 1] << 8) | frame.data[offset + 2];
+		let best = cache.get(key);
+		if (best === undefined) {
+			best = 1;
+			let score = Infinity;
+			for (let index = 1; index < palette.length; index += 1) {
+				const color = palette[index];
+				const dr = frame.data[offset] - color.r;
+				const dg = frame.data[offset + 1] - color.g;
+				const db = frame.data[offset + 2] - color.b;
+				const current = dr * dr + dg * dg + db * db;
+				if (current < score) { score = current; best = index; }
+			}
+			cache.set(key, best);
+		}
+		indices[pixel] = best;
+	}
+	return indices;
+}
+
+function encodeAnimatedGif(animation) {
+	const palette = rgbPalette.slice(0, 256);
+	if (!palette.length || palette[0].a !== 0) palette.unshift({ r: 0, g: 0, b: 0, a: 0 });
+	const tableSize = Math.max(2, 2 ** Math.ceil(Math.log2(palette.length)));
+	while (palette.length < tableSize) palette.push({ r: 0, g: 0, b: 0, a: 0 });
+	const minimumCodeSize = Math.max(2, Math.ceil(Math.log2(tableSize)));
+	const bytes = [...'GIF89a'].map((char) => char.charCodeAt(0));
+	writeGifWord(bytes, animation.width); writeGifWord(bytes, animation.height);
+	const colorResolution = 0x70;
+	bytes.push(0x80 | colorResolution | (minimumCodeSize - 1), 0, 0);
+	for (const color of palette) bytes.push(color.r, color.g, color.b);
+	for (const frame of animation.frames) {
+		const indices = frame.indexMap || paletteIndexData(frame, palette);
+		const delay = Math.min(65535, Math.max(1, Math.round(frame.delay / 10)));
+		bytes.push(0x21, 0xf9, 0x04, 0x01); writeGifWord(bytes, delay); bytes.push(0, 0);
+		bytes.push(0x2c); writeGifWord(bytes, 0); writeGifWord(bytes, 0); writeGifWord(bytes, animation.width); writeGifWord(bytes, animation.height); bytes.push(0);
+		const compressed = encodeGifLzw(indices, minimumCodeSize);
+		bytes.push(minimumCodeSize);
+		for (let offset = 0; offset < compressed.length; offset += 255) {
+			const block = compressed.slice(offset, offset + 255);
+			bytes.push(block.length, ...block);
+		}
+		bytes.push(0);
+	}
+	bytes.push(0x3b);
+	return new Blob([new Uint8Array(bytes)], { type: 'image/gif' });
+}
+
+function downloadBlob(blob, filename) {
+	const url = URL.createObjectURL(blob);
+	const link = document.createElement('a');
+	link.href = url; link.download = filename; link.click();
+	setTimeout(() => { URL.revokeObjectURL(url); link.remove(); }, 0);
+}
+
+downloadButton.addEventListener('click', async function (e) {
 	e.preventDefault();
 	try {
-		const dataUrl = canvas.toDataURL(
-			originalMimeType,
-		);
-		const link = document.createElement("a");
-		link.href = dataUrl;
-		link.download = canvasName;
-		link.click();
-		link.remove();
-	} catch (dnErr) {
-		displayErrorPopup(
-			"IO Canvas Download Error",
-			dnErr.message,
-			dnErr.stack,
-		);
+		if (processedAnimation?.frames?.length) {
+			downloadBlob(encodeAnimatedGif(processedAnimation), canvasName.replace(/\.[^.]+$/, '.gif'));
+			addToSessionLog('IO', `Downloaded processed animation (${processedAnimation.frames.length} frames).`);
+			return;
+		}
+		const blob = await new Promise((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Canvas export returned no data.')), 'image/png'));
+		downloadBlob(blob, canvasName.replace(/\.[^.]+$/, '.png'));
+	} catch (error) {
+		displayErrorPopup('IO Canvas Download Error', error.message, error.stack);
 	}
 });
 

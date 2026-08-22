@@ -1,374 +1,527 @@
-// animproc.js — Animation Frame Processor
-// Handles GIF, APNG, WebM, animated JXL frame extraction and conversion.
+// animproc.js — MIME detection and animation frame decoding.
+// Safe HTML guidance: https://developer.mozilla.org/en-US/docs/Web/API/Element/setHTML
 
-const ANIM_MIME_TYPES = {
-	"image/gif": "gif",
-	"image/apng": "apng",
-	"video/webm": "webm",
-	"image/jxl": "jxl"
-};
+const ANIM_MIME_TYPES = Object.freeze({
+	'image/gif': 'gif',
+	'image/apng': 'apng',
+	'video/webm': 'webm',
+	'image/jxl': 'jxl',
+});
 
-// ============================================================
-// GIF DECODER (LZW-based, pure JS)
-// ============================================================
+const clampDelay = (value) => Math.max(10, Number.isFinite(value) ? value : 100);
+const readU32 = (bytes, offset) => (
+	((bytes[offset] << 24) | (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3]) >>> 0
+);
+const readU16 = (bytes, offset) => bytes[offset] | (bytes[offset + 1] << 8);
+const ascii = (bytes, offset, length) => String.fromCharCode(...bytes.slice(offset, offset + length));
+
+function isAnimatedFormat(mimeType) {
+	return Object.prototype.hasOwnProperty.call(ANIM_MIME_TYPES, String(mimeType).toLowerCase());
+}
+
+function isAnimatedBuffer(buffer, mimeType) {
+	const bytes = new Uint8Array(buffer);
+	const mime = String(mimeType || '').toLowerCase();
+	if (mime === 'image/gif') return bytes.includes(0x2c);
+	if (mime === 'image/apng' || mime === 'image/png') {
+		for (let pos = 8; pos + 12 <= bytes.length;) {
+			const length = readU32(bytes, pos);
+			const type = ascii(bytes, pos + 4, 4);
+			if (type === 'acTL') return true;
+			pos += length + 12;
+		}
+		return false;
+	}
+	if (mime === 'image/webp' && ascii(bytes, 0, 4) === 'RIFF' && ascii(bytes, 8, 4) === 'WEBP') {
+		const chunk = ascii(bytes, 12, 4);
+		return chunk === 'ANIM' || chunk === 'ANMF' || (chunk === 'VP8X' && Boolean(bytes[20] & 0x02));
+	}
+	return mime === 'video/webm' || mime === 'image/jxl';
+}
+
+function cloneCanvas(source) {
+	const canvas = document.createElement('canvas');
+	canvas.width = source.width;
+	canvas.height = source.height;
+	canvas.getContext('2d').drawImage(source, 0, 0);
+	return canvas;
+}
+
+function imageDataToCanvas(data, width, height) {
+	const canvas = document.createElement('canvas');
+	canvas.width = width;
+	canvas.height = height;
+	canvas.getContext('2d').putImageData(data, 0, 0);
+	return canvas;
+}
+
+async function decodeWithImageDecoder(buffer, mimeType) {
+	if (!('ImageDecoder' in window)) return [];
+	const type = mimeType === 'image/apng' ? 'image/png' : mimeType;
+	let decoder;
+	try {
+		decoder = new ImageDecoder({ data: buffer, type });
+		await decoder.tracks.ready;
+		const track = decoder.tracks.selectedTrack;
+		const count = Math.max(0, track?.frameCount || 0);
+		const frames = [];
+		for (let index = 0; index < count; index += 1) {
+			const result = await decoder.decode({ frameIndex: index });
+			const image = result.image;
+			const width = image.displayWidth || image.codedWidth;
+			const height = image.displayHeight || image.codedHeight;
+			const canvas = document.createElement('canvas');
+			canvas.width = width;
+			canvas.height = height;
+			canvas.getContext('2d').drawImage(image, 0, 0, width, height);
+			frames.push({
+				image: canvas,
+				delay: clampDelay((image.duration || 100000) / 1000),
+				width,
+				height,
+				rect: { x: 0, y: 0, width, height },
+				changedOnly: false,
+				composited: true,
+				compositionMode: 'latest',
+			});
+			image.close?.();
+		}
+		decoder.close?.();
+		return frames;
+	} catch (error) {
+		decoder?.close?.();
+		return [];
+	}
+}
+
 class GIFDecoder {
 	constructor(buffer) {
-		this.buffer = new Uint8Array(buffer);
+		this.bytes = new Uint8Array(buffer);
 		this.pos = 0;
 		this.frames = [];
+		this.screen = null;
+		this.width = 0;
+		this.height = 0;
+		this.globalTable = [];
+		this.backgroundIndex = 0;
+		this.delay = 100;
+		this.transparentIndex = -1;
+		this.disposal = 0;
 	}
 
-	_readByte() { return this.buffer[this.pos++]; }
-	_readWord() { return this._readByte() | (this._readByte() << 8); }
-	_readBytes(n) { const r = this.buffer.slice(this.pos, this.pos + n); this.pos += n; return r; }
+	readByte() {
+		if (this.pos >= this.bytes.length) throw new Error('Unexpected end of GIF data.');
+		return this.bytes[this.pos++];
+	}
+
+	readWord() {
+		return this.readByte() | (this.readByte() << 8);
+	}
+
+	readBytes(length) {
+		const end = this.pos + length;
+		if (end > this.bytes.length) throw new Error('Invalid GIF block length.');
+		const value = this.bytes.slice(this.pos, end);
+		this.pos = end;
+		return value;
+	}
+
+	readColorTable(size) {
+		const table = [];
+		for (let index = 0; index < size; index += 1) {
+			table.push([this.readByte(), this.readByte(), this.readByte()]);
+		}
+		return table;
+	}
+
+	clearRect(imageData, x, y, width, height) {
+		const left = Math.max(0, x);
+		const top = Math.max(0, y);
+		const right = Math.min(this.width, x + width);
+		const bottom = Math.min(this.height, y + height);
+		for (let row = top; row < bottom; row += 1) {
+			const start = (row * this.width + left) * 4;
+			imageData.data.fill(0, start, start + (right - left) * 4);
+		}
+	}
 
 	decode() {
-		const sig = String.fromCharCode(...this._readBytes(6));
-		if (sig !== "GIF89a" && sig !== "GIF87a") throw new Error("Invalid GIF signature");
-		const w = this._readWord(), h = this._readWord();
-		const packed = this._readByte();
-		const gctFlag = packed & 0x80;
-		const gctSize = 2 << (packed & 0x07);
-		this._readByte(); // bg index
-		this._readByte(); // aspect ratio
-		let gct = [];
-		if (gctFlag) {
-			for (let i = 0; i < gctSize; i++) {
-				gct.push([this._readByte(), this._readByte(), this._readByte()]);
+		const signature = ascii(this.readBytes(6), 0, 6);
+		if (signature !== 'GIF87a' && signature !== 'GIF89a') throw new Error('Invalid GIF signature.');
+		this.width = this.readWord();
+		this.height = this.readWord();
+		const packed = this.readByte();
+		const hasGlobalTable = Boolean(packed & 0x80);
+		const globalSize = 2 ** ((packed & 0x07) + 1);
+		this.backgroundIndex = this.readByte();
+		this.readByte();
+		this.globalTable = hasGlobalTable ? this.readColorTable(globalSize) : [];
+		this.screen = new ImageData(this.width, this.height);
+
+		while (this.pos < this.bytes.length) {
+			const marker = this.readByte();
+			if (marker === 0x3b) break;
+			if (marker === 0x21) {
+				this.readExtension();
+				continue;
 			}
+			if (marker !== 0x2c) throw new Error('Unknown GIF block marker.');
+			this.readFrame();
 		}
-		let delay = 100, transparentIndex = -1;
-		while (this.pos < this.buffer.length) {
-			const blockType = this._readByte();
-			if (blockType === 0x2C) {
-				// Image descriptor
-				const left = this._readWord(), top = this._readWord();
-				const imgW = this._readWord(), imgH = this._readWord();
-				const imgPacked = this._readByte();
-				const lctFlag = imgPacked & 0x80;
-				const interlace = imgPacked & 0x40;
-				const lctSize = 2 << (imgPacked & 0x07);
-				let ct = gct;
-				if (lctFlag) {
-					ct = [];
-					for (let i = 0; i < lctSize; i++) {
-						ct.push([this._readByte(), this._readByte(), this._readByte()]);
-					}
-				}
-				const lzwMin = this._readByte();
-				const indices = this._readLZWData(lzwMin);
-				const canvas = document.createElement("canvas");
-				canvas.width = w; canvas.height = h;
-				const ctx = canvas.getContext("2d");
-				const imgData = ctx.createImageData(w, h);
-				const d = imgData.data;
-				for (let i = 0; i < indices.length; i++) {
-					const idx = indices[i];
-					const off = i << 2;
-					if (idx === transparentIndex) {
-						d[off + 3] = 0;
-					} else if (ct[idx]) {
-						d[off] = ct[idx][0];
-						d[off + 1] = ct[idx][1];
-						d[off + 2] = ct[idx][2];
-						d[off + 3] = 255;
-					}
-				}
-				ctx.putImageData(imgData, 0, 0);
-				this.frames.push({
-					image: canvas,
-					delay: delay,
-					width: w,
-					height: h
-				});
-				delay = 100;
-				transparentIndex = -1;
-			} else if (blockType === 0x21) {
-				const extType = this._readByte();
-				if (extType === 0xF9) {
-					// Graphic Control Extension
-					const blockSize = this._readByte();
-					const gcePacked = this._readByte();
-					delay = this._readWord() * 10;
-					transparentIndex = this._readByte();
-					this._readByte(); // terminator
-				} else {
-					// Skip other extensions
-					let len;
-					while ((len = this._readByte()) !== 0) this.pos += len;
-				}
-			} else if (blockType === 0x3B) {
-				break;
-			}
-		}
+		if (!this.frames.length) throw new Error('GIF contains no image frames.');
 		return this.frames;
 	}
 
-	_readLZWData(minCodeSize) {
-		const output = [];
-		const clearCode = 1 << minCodeSize;
-		const eoiCode = clearCode + 1;
-		let codeSize = minCodeSize + 1;
-		let dict = [];
-		let prevCode = -1;
-		let bits = 0, bitBuffer = 0;
+	readExtension() {
+		const type = this.readByte();
+		if (type === 0xf9) {
+			const blockSize = this.readByte();
+			if (blockSize !== 4) throw new Error('Invalid GIF graphic control extension.');
+			const packed = this.readByte();
+			this.disposal = (packed >> 2) & 0x07;
+			this.delay = Math.max(10, this.readWord() * 10);
+			const transparentIndex = this.readByte();
+			this.transparentIndex = packed & 1 ? transparentIndex : -1;
+			this.readByte();
+			return;
+		}
+		let length;
+		while ((length = this.readByte()) !== 0) this.readBytes(length);
+	}
 
-		const readCode = () => {
-			while (bits < codeSize) {
-				if (this._subBlockPos >= this._subBlockLen) {
-					this._subBlockLen = this._readByte();
-					if (this._subBlockLen === 0) return -1;
-					this._subBlock = this._readBytes(this._subBlockLen);
-					this._subBlockPos = 0;
-				}
-				bitBuffer |= this._subBlock[this._subBlockPos++] << bits;
-				bits += 8;
+	readFrame() {
+		const x = this.readWord();
+		const y = this.readWord();
+		const width = this.readWord();
+		const height = this.readWord();
+		const packed = this.readByte();
+		const hasLocalTable = Boolean(packed & 0x80);
+		const interlaced = Boolean(packed & 0x40);
+		const tableSize = 2 ** ((packed & 0x07) + 1);
+		const table = hasLocalTable ? this.readColorTable(tableSize) : this.globalTable;
+		const indices = this.readLZWData(this.readByte(), width * height);
+		const before = this.disposal === 3 ? new Uint8ClampedArray(this.screen.data) : null;
+		const rows = [];
+		if (interlaced) {
+			for (const [start, step] of [[0, 8], [4, 8], [2, 4], [1, 2]]) {
+				for (let row = start; row < height; row += step) rows.push(row);
 			}
-			const code = bitBuffer & ((1 << codeSize) - 1);
-			bitBuffer >>= codeSize;
-			bits -= codeSize;
-			return code;
-		};
+		} else {
+			for (let row = 0; row < height; row += 1) rows.push(row);
+		}
+		let source = 0;
+		for (const row of rows) {
+			for (let col = 0; col < width; col += 1) {
+				const colorIndex = indices[source++];
+				if (colorIndex === this.transparentIndex) continue;
+				const color = table[colorIndex];
+				if (!color) continue;
+				const px = x + col;
+				const py = y + row;
+				if (px < 0 || py < 0 || px >= this.width || py >= this.height) continue;
+				const offset = (py * this.width + px) * 4;
+				this.screen.data[offset] = color[0];
+				this.screen.data[offset + 1] = color[1];
+				this.screen.data[offset + 2] = color[2];
+				this.screen.data[offset + 3] = 255;
+			}
+		}
+		const image = imageDataToCanvas(this.screen, this.width, this.height);
+		const changedOnly = x !== 0 || y !== 0 || width !== this.width || height !== this.height;
+		this.frames.push({
+			image,
+			delay: clampDelay(this.delay),
+			width: this.width,
+			height: this.height,
+			rect: { x, y, width, height },
+			changedOnly,
+			composited: true,
+			compositionMode: changedOnly ? 'latest' : 'replace',
+			disposal: this.disposal,
+		});
+		if (this.disposal === 2) this.clearRect(this.screen, x, y, width, height);
+		if (this.disposal === 3 && before) this.screen.data.set(before);
+		this.delay = 100;
+		this.transparentIndex = -1;
+		this.disposal = 0;
+	}
 
-		this._subBlockLen = 0;
-		this._subBlockPos = 0;
-		this._subBlock = [];
-
-		const initDict = () => {
-			dict = [];
-			for (let i = 0; i < clearCode; i++) dict.push([i]);
-			dict.push(null); // clear
-			dict.push(null); // eoi
+	readLZWData(minCodeSize, expectedLength) {
+		const compressed = [];
+		let blockLength;
+		while ((blockLength = this.readByte()) !== 0) compressed.push(...this.readBytes(blockLength));
+		const clear = 1 << minCodeSize;
+		const end = clear + 1;
+		let codeSize = minCodeSize + 1;
+		let dictionary;
+		let nextCode;
+		let bitBuffer = 0;
+		let bitCount = 0;
+		let offset = 0;
+		const output = [];
+		const reset = () => {
+			dictionary = Array.from({ length: clear }, (_, index) => [index]);
+			dictionary.push(null, null);
+			nextCode = end + 1;
 			codeSize = minCodeSize + 1;
 		};
-
-		initDict();
-
-		while (true) {
-			const code = readCode();
-			if (code === -1 || code === eoiCode) break;
-			if (code === clearCode) {
-				initDict();
-				prevCode = -1;
-				continue;
+		const readCode = () => {
+			while (bitCount < codeSize && offset < compressed.length) {
+				bitBuffer |= compressed[offset++] << bitCount;
+				bitCount += 8;
 			}
-			if (prevCode === -1) {
-				output.push(...dict[code]);
-				prevCode = code;
+			if (bitCount < codeSize) return -1;
+			const code = bitBuffer & ((1 << codeSize) - 1);
+			bitBuffer >>= codeSize;
+			bitCount -= codeSize;
+			return code;
+		};
+		reset();
+		let previous = null;
+		while (output.length < expectedLength) {
+			const code = readCode();
+			if (code < 0 || code === end) break;
+			if (code === clear) {
+				reset();
+				previous = null;
 				continue;
 			}
 			let entry;
-			if (code < dict.length) {
-				entry = dict[code];
-			} else {
-				entry = [...dict[prevCode], dict[prevCode][0]];
-			}
+			if (code < dictionary.length && dictionary[code]) entry = dictionary[code];
+			else if (code === nextCode && previous) entry = [...previous, previous[0]];
+			else throw new Error('Invalid GIF LZW code.');
 			output.push(...entry);
-			dict.push([...dict[prevCode], entry[0]]);
-			if (dict.length === (1 << codeSize) && codeSize < 12) codeSize++;
-			prevCode = code;
+			if (previous && nextCode < 4096) {
+				dictionary[nextCode++] = [...previous, entry[0]];
+				if (nextCode === (1 << codeSize) && codeSize < 12) codeSize += 1;
+			}
+			previous = entry;
 		}
-		return output;
+		return output.slice(0, expectedLength);
 	}
 }
 
-// ============================================================
-// APNG DECODER (frame extraction from PNG chunks)
-// ============================================================
-class APNGDecoder {
+class PNGDecoder {
 	constructor(buffer) {
-		this.buffer = new Uint8Array(buffer);
-		this.pos = 8; // Skip PNG signature
-		this.frames = [];
+		this.bytes = new Uint8Array(buffer);
 		this.width = 0;
 		this.height = 0;
+		this.bitDepth = 0;
+		this.colorType = 0;
+		this.palette = [];
+		this.transparency = [];
 		this.playCount = 0;
+		this.frames = [];
 	}
 
-	_readDWord() {
-		return ((this.buffer[this.pos] << 24) | (this.buffer[this.pos + 1] << 16) |
-				(this.buffer[this.pos + 2] << 8) | this.buffer[this.pos + 3]) >>> 0;
+	async inflate(chunks) {
+		if (!('DecompressionStream' in window)) throw new Error('APNG decoding needs browser DecompressionStream support.');
+		const stream = new Blob([new Uint8Array(chunks.reduce((all, chunk) => [...all, ...chunk], []))])
+			.stream().pipeThrough(new DecompressionStream('deflate'));
+		return new Uint8Array(await new Response(stream).arrayBuffer());
 	}
 
-	_readChunk() {
-		const len = this._readDWord();
-		const type = String.fromCharCode(...this.buffer.slice(this.pos + 4, this.pos + 8));
-		const data = this.buffer.slice(this.pos + 8, this.pos + 8 + len);
-		const crc = this._readDWord();
-		this.pos += 12 + len;
-		return { type, len, data, crc };
-	}
-
-	decode() {
-		let frameData = [];
-		let actl = null;
-		let idatChunks = [];
-		let fctl = null;
-
-		while (this.pos < this.buffer.length) {
-			const chunk = this._readChunk();
-			if (chunk.type === "IHDR") {
-				this.width = (chunk.data[0] << 24) | (chunk.data[1] << 16) | (chunk.data[2] << 8) | chunk.data[3];
-				this.height = (chunk.data[4] << 24) | (chunk.data[5] << 16) | (chunk.data[6] << 8) | chunk.data[7];
-			} else if (chunk.type === "acTL") {
-				actl = { frames: (chunk.data[0] << 24) | (chunk.data[1] << 16) | (chunk.data[2] << 8) | chunk.data[3],
-						 plays: (chunk.data[4] << 24) | (chunk.data[5] << 16) | (chunk.data[6] << 8) | chunk.data[7] };
-			} else if (chunk.type === "fcTL") {
-				if (fctl && idatChunks.length > 0) {
-					frameData.push({ fctl, idat: idatChunks });
-					idatChunks = [];
-				}
-				fctl = {
-					seq: (chunk.data[0] << 24) | (chunk.data[1] << 16) | (chunk.data[2] << 8) | chunk.data[3],
-					width: (chunk.data[4] << 24) | (chunk.data[5] << 16) | (chunk.data[6] << 8) | chunk.data[7],
-					height: (chunk.data[8] << 24) | (chunk.data[9] << 16) | (chunk.data[10] << 8) | chunk.data[11],
-					x: (chunk.data[12] << 24) | (chunk.data[13] << 16) | (chunk.data[14] << 8) | chunk.data[15],
-					y: (chunk.data[16] << 24) | (chunk.data[17] << 16) | (chunk.data[18] << 8) | chunk.data[19],
-					delayNum: (chunk.data[20] << 8) | chunk.data[21],
-					delayDen: chunk.data[22] === 0 ? 100 : chunk.data[22],
-					dispose: chunk.data[23],
-					blend: chunk.data[24]
+	parseChunks() {
+		const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+		if (!signature.every((value, index) => this.bytes[index] === value)) throw new Error('Invalid PNG signature.');
+		const defaultChunks = [];
+		const frames = [];
+		let current = null;
+		for (let pos = 8; pos + 12 <= this.bytes.length;) {
+			const length = readU32(this.bytes, pos);
+			const type = ascii(this.bytes, pos + 4, 4);
+			const data = this.bytes.slice(pos + 8, pos + 8 + length);
+			pos += length + 12;
+			if (type === 'IHDR') {
+				this.width = readU32(data, 0);
+				this.height = readU32(data, 4);
+				this.bitDepth = data[8];
+				this.colorType = data[9];
+			} else if (type === 'acTL') {
+				this.playCount = readU32(data, 4);
+			} else if (type === 'PLTE') {
+				for (let index = 0; index < data.length; index += 3) this.palette.push([data[index], data[index + 1], data[index + 2]]);
+			} else if (type === 'tRNS') {
+				this.transparency = [...data];
+			} else if (type === 'fcTL') {
+				if (current) frames.push(current);
+				current = {
+					control: {
+						width: readU32(data, 4),
+						height: readU32(data, 8),
+						x: readU32(data, 12),
+						y: readU32(data, 16),
+						delayNum: (data[20] << 8) | data[21],
+						delayDen: ((data[22] << 8) | data[23]) || 100,
+						dispose: data[24],
+						blend: data[25],
+					},
+					chunks: [],
 				};
-			} else if (chunk.type === "fdAT") {
-				const seq = (chunk.data[0] << 24) | (chunk.data[1] << 16) | (chunk.data[2] << 8) | chunk.data[3];
-				idatChunks.push(chunk.data.slice(4));
-			} else if (chunk.type === "IDAT") {
-				idatChunks.push(chunk.data);
-			} else if (chunk.type === "IEND") {
-				if (fctl && idatChunks.length > 0) {
-					frameData.push({ fctl, idat: idatChunks });
-				}
+			} else if (type === 'IDAT') {
+				(current ? current.chunks : defaultChunks).push(data);
+			} else if (type === 'fdAT' && current) {
+				current.chunks.push(data.slice(4));
+			} else if (type === 'IEND') {
 				break;
 			}
 		}
+		if (current) frames.push(current);
+		if (defaultChunks.length && frames.length && !frames[0].chunks.length) frames[0].chunks = defaultChunks;
+		return { frames, defaultChunks };
+	}
 
-		// For simplicity, return first frame as image for now
-		// Full APNG rendering requires complex compositing
-		if (frameData.length > 0) {
-			const first = frameData[0];
-			const canvas = document.createElement("canvas");
-			canvas.width = this.width;
-			canvas.height = this.height;
-			// Return canvas with first frame info
+	unfilter(raw, width, height, bytesPerPixel) {
+		const stride = width * bytesPerPixel;
+		const result = new Uint8Array(stride * height);
+		let source = 0;
+		for (let y = 0; y < height; y += 1) {
+			const filter = raw[source++];
+			const rowStart = y * stride;
+			for (let x = 0; x < stride; x += 1) {
+				const value = raw[source++];
+				const left = x >= bytesPerPixel ? result[rowStart + x - bytesPerPixel] : 0;
+				const above = y ? result[rowStart - stride + x] : 0;
+				const upperLeft = y && x >= bytesPerPixel ? result[rowStart - stride + x - bytesPerPixel] : 0;
+				let decoded = value;
+				if (filter === 1) decoded = value + left;
+				else if (filter === 2) decoded = value + above;
+				else if (filter === 3) decoded = value + Math.floor((left + above) / 2);
+				else if (filter === 4) {
+					const estimate = left + above - upperLeft;
+					const pa = Math.abs(estimate - left);
+					const pb = Math.abs(estimate - above);
+					const pc = Math.abs(estimate - upperLeft);
+					decoded = value + (pa <= pb && pa <= pc ? left : pb <= pc ? above : upperLeft);
+				}
+				result[rowStart + x] = decoded & 255;
+			}
+		}
+		return result;
+	}
+
+	async decodePixels(chunks, width, height) {
+		if (this.bitDepth !== 8) throw new Error('Only 8-bit PNG/APNG frames are supported.');
+		const bytesPerPixel = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }[this.colorType];
+		if (!bytesPerPixel) throw new Error(`Unsupported PNG color type: ${this.colorType}.`);
+		const raw = this.unfilter(await this.inflate(chunks), width, height, bytesPerPixel);
+		const data = new Uint8ClampedArray(width * height * 4);
+		for (let y = 0; y < height; y += 1) {
+			for (let x = 0; x < width; x += 1) {
+				const source = (y * width + x) * bytesPerPixel;
+				const target = (y * width + x) * 4;
+				let r = 0; let g = 0; let b = 0; let a = 255;
+				if (this.colorType === 6) [r, g, b, a] = raw.slice(source, source + 4);
+				else if (this.colorType === 2) [r, g, b] = raw.slice(source, source + 3);
+				else if (this.colorType === 4) [r, a] = raw.slice(source, source + 2), g = r, b = r;
+				else if (this.colorType === 0) r = g = b = raw[source];
+				else if (this.colorType === 3) {
+					const color = this.palette[raw[source]] || [0, 0, 0];
+					[r, g, b] = color;
+					a = this.transparency[raw[source]] ?? 255;
+				}
+				data[target] = r; data[target + 1] = g; data[target + 2] = b; data[target + 3] = a;
+			}
+		}
+		return new ImageData(data, width, height);
+	}
+
+	async decode() {
+		const parsed = this.parseChunks();
+		if (!parsed.frames.length) throw new Error('PNG does not contain APNG frame controls.');
+		const screen = document.createElement('canvas');
+		screen.width = this.width; screen.height = this.height;
+		const screenContext = screen.getContext('2d');
+		for (const frame of parsed.frames) {
+			const control = frame.control;
+			const frameData = await this.decodePixels(frame.chunks, control.width, control.height);
+			const backup = control.dispose === 2 ? screenContext.getImageData(0, 0, this.width, this.height) : null;
+			if (control.blend === 0) screenContext.clearRect(control.x, control.y, control.width, control.height);
+			const patch = imageDataToCanvas(frameData, control.width, control.height);
+			screenContext.drawImage(patch, control.x, control.y);
+			const changedOnly = control.x !== 0 || control.y !== 0 || control.width !== this.width || control.height !== this.height;
 			this.frames.push({
-				image: canvas,
-				delay: (first.fctl.delayNum / first.fctl.delayDen) * 1000,
+				image: cloneCanvas(screen),
+				delay: clampDelay(1000 * control.delayNum / control.delayDen),
 				width: this.width,
-				height: this.height
+				height: this.height,
+				rect: { x: control.x, y: control.y, width: control.width, height: control.height },
+				changedOnly,
+				composited: true,
+				compositionMode: changedOnly ? 'latest' : 'replace',
 			});
+			if (control.dispose === 1) screenContext.clearRect(control.x, control.y, control.width, control.height);
+			else if (control.dispose === 2 && backup) screenContext.putImageData(backup, 0, 0);
 		}
 		return this.frames;
 	}
 }
 
-// ============================================================
-// WEBM DECODER (uses HTMLVideoElement for frame extraction)
-// ============================================================
 class WebMDecoder {
 	constructor(buffer, mimeType) {
 		this.buffer = buffer;
-		this.mimeType = mimeType || "video/webm";
+		this.mimeType = mimeType || 'video/webm';
 	}
 
 	async decode() {
-		const blob = new Blob([this.buffer], { type: this.mimeType });
-		const url = URL.createObjectURL(blob);
-		const video = document.createElement("video");
-		video.src = url;
-		video.muted = true;
-		video.playsInline = true;
-
-		await new Promise((resolve, reject) => {
-			video.onloadedmetadata = resolve;
-			video.onerror = reject;
-		});
-
-		const canvas = document.createElement("canvas");
-		canvas.width = video.videoWidth;
-		canvas.height = video.videoHeight;
-		const ctx = canvas.getContext("2d");
-
-		const frames = [];
-		const fps = 30;
-		const duration = video.duration;
-		const frameCount = Math.min(Math.floor(duration * fps), 300); // Max 300 frames
-
-		video.currentTime = 0;
-		await video.play();
-
-		for (let i = 0; i < frameCount; i++) {
-			video.currentTime = i / fps;
-			await new Promise(r => {
-				video.onseeked = r;
+		const url = URL.createObjectURL(new Blob([this.buffer], { type: this.mimeType }));
+		const video = document.createElement('video');
+		video.src = url; video.muted = true; video.playsInline = true; video.preload = 'auto';
+		try {
+			await new Promise((resolve, reject) => {
+				video.onloadedmetadata = resolve;
+				video.onerror = () => reject(new Error('Unable to decode WebM video.'));
 			});
-			ctx.drawImage(video, 0, 0);
-			frames.push({
-				image: canvas,
-				delay: 1000 / fps,
-				width: video.videoWidth,
-				height: video.videoHeight
-			});
+			const width = video.videoWidth; const height = video.videoHeight;
+			const duration = Number.isFinite(video.duration) ? video.duration : 0;
+			const fps = 30;
+			const frameCount = Math.max(1, Math.min(300, Math.ceil(duration * fps)));
+			const frames = [];
+			video.pause();
+			for (let index = 0; index < frameCount; index += 1) {
+				const time = duration ? Math.min(index / fps, Math.max(0, duration - 0.001)) : 0;
+				await new Promise((resolve, reject) => {
+					const done = () => { video.removeEventListener('seeked', done); resolve(); };
+					video.addEventListener('seeked', done, { once: true });
+					video.addEventListener('error', () => reject(new Error('WebM frame seek failed.')), { once: true });
+					video.currentTime = time;
+				});
+				const canvas = document.createElement('canvas');
+				canvas.width = width; canvas.height = height;
+				canvas.getContext('2d').drawImage(video, 0, 0, width, height);
+				frames.push({ image: canvas, delay: 1000 / fps, width, height, rect: { x: 0, y: 0, width, height }, changedOnly: false, composited: true, compositionMode: 'latest' });
+			}
+			return frames;
+		} finally {
+			video.pause(); video.removeAttribute('src'); video.load(); URL.revokeObjectURL(url);
 		}
+	}
+}
 
-		video.pause();
+async function decodeJXL(buffer) {
+	const url = URL.createObjectURL(new Blob([buffer], { type: 'image/jxl' }));
+	try {
+		const image = new Image();
+		image.src = url;
+		await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = () => reject(new Error('Unable to decode JXL image.')); });
+		const canvas = document.createElement('canvas');
+		canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+		canvas.getContext('2d').drawImage(image, 0, 0);
+		return [{ image: canvas, delay: 100, width: canvas.width, height: canvas.height, rect: { x: 0, y: 0, width: canvas.width, height: canvas.height }, changedOnly: false, composited: true, compositionMode: 'latest' }];
+	} finally {
 		URL.revokeObjectURL(url);
-		return frames;
 	}
 }
 
-// ============================================================
-// ANIMATED JXL (placeholder — JXL animation not widely supported yet)
-// ============================================================
-class JXLDecoder {
-	constructor(buffer) {
-		this.buffer = buffer;
-	}
-
-	async decode() {
-		// JXL animation decoding requires libjxl WASM
-		// For now, return single frame using standard image decode
-		const blob = new Blob([this.buffer], { type: "image/jxl" });
-		const url = URL.createObjectURL(blob);
-		const img = new Image();
-		img.src = url;
-		await new Promise((resolve, reject) => {
-			img.onload = resolve;
-			img.onerror = reject;
-		});
-		const canvas = document.createElement("canvas");
-		canvas.width = img.naturalWidth;
-		canvas.height = img.naturalHeight;
-		const ctx = canvas.getContext("2d");
-		ctx.drawImage(img, 0, 0);
-		URL.revokeObjectURL(url);
-		return [{
-			image: canvas,
-			delay: 100,
-			width: img.naturalWidth,
-			height: img.naturalHeight
-		}];
-	}
-}
-
-// ============================================================
-// MAIN EXPORT: detect and decode animation
-// ============================================================
-/*export*/ async function decodeAnimation(buffer, mimeType) {
-	const type = ANIM_MIME_TYPES[mimeType];
-	switch (type) {
-		case "gif":
-			return new GIFDecoder(buffer).decode();
-		case "apng":
-			return new APNGDecoder(buffer).decode();
-		case "webm":
-			return new WebMDecoder(buffer, mimeType).decode();
-		case "jxl":
-			return new JXLDecoder(buffer).decode();
-		default:
-			throw new Error("Unsupported animation format: " + mimeType);
-	}
-}
-
-/*export*/ function isAnimatedFormat(mimeType) {
-	return !!ANIM_MIME_TYPES[mimeType];
+async function decodeAnimation(buffer, mimeType) {
+	const mime = String(mimeType || '').toLowerCase();
+	// These decoders expose frame rectangles and composite updates over the latest screen.
+	if (mime === 'image/gif') return new GIFDecoder(buffer).decode();
+	if (mime === 'image/apng' || (mime === 'image/png' && isAnimatedBuffer(buffer, mime))) return new PNGDecoder(buffer).decode();
+	const nativeFrames = await decodeWithImageDecoder(buffer, mime);
+	if (nativeFrames.length) return nativeFrames;
+	if (mime === 'video/webm') return new WebMDecoder(buffer, mime).decode();
+	if (mime === 'image/jxl') return decodeJXL(buffer);
+	if (mime === 'image/webp') throw new Error('Animated WebP requires browser ImageDecoder support.');
+	throw new Error(`Unsupported animation format: ${mimeType}.`);
 }
