@@ -25,32 +25,32 @@ document.querySelector("body").insertAdjacentHTML('beforeend',`
 			this page use <i>ai</i> to make project but you can fork this to make as human code sorry.
 		</dd>
 	</dl>
-<div id="notification-popup-overlay">
-	<div class="popup-error-card">
-		<div class="popup-header">
-			<span>⚠️ PROCESS EXCEPTION DETECTED</span>
-			<button class="popup-close-btn" id="popup-close-btn">
-				DISMISS
-			</button>
-		</div>
-		<div class="popup-body">
-			<p style="margin: 0 0 6px 0">
-				<strong>Error Type:</strong>
-				<span id="popup-err-type">N/A</span>
-			</p>
-			<p style="margin: 0 0 10px 0">
-				<strong>Message:</strong>
-				<span id="popup-err-message">N/A</span>
-			</p>
-			<div class="popup-controls">
-				<button class="popup-toggle-btn" id="btn-toggle-log">
-					Show Full Log ▼
+	<div id="notification-popup-overlay">
+		<div class="popup-error-card">
+			<div class="popup-header">
+				<span>⚠️ PROCESS EXCEPTION DETECTED</span>
+				<button class="popup-close-btn" id="popup-close-btn">
+					DISMISS
 				</button>
-			</div>
-			<textarea id="popup-err-stack" readonly>No trace details available.</textarea>
-		</div>
-	</div>
-</div>
+		    </div>
+		    <div class="popup-body">
+		    	<p style="margin: 0 0 6px 0">
+		    		<strong>Error Type:</strong>
+		    		<span id="popup-err-type">N/A</span>
+		    	</p>
+			    <p style="margin: 0 0 10px 0">
+			    	<strong>Message:</strong>
+			    	<span id="popup-err-message">N/A</span>
+		    	</p>
+		    	<div class="popup-controls">
+	    			<button class="popup-toggle-btn" id="btn-toggle-log">
+	    				Show Full Log ▼
+	    			</button>
+	    		</div>
+	    		<textarea id="popup-err-stack" readonly>No trace details available.</textarea>
+	    	</div>
+    	</div>
+    </div>
 </div>
 
 <div id="status">System Status: Awaiting Image Upload Asset...</div>

@@ -14,7 +14,7 @@
 	--main-mono-font: Consolas, Monaco, "Lucida Console", "Liberation Mono", "Noto Sans Mono", "Open Sans Mono", "DejaVu Sans Mono", "Bitstream Vera Sans Mono", Courier, "Courier New", monospace;
 }
 
-body {
+html, body {
 	font-family: var(--main-font);
 	font-size: 14px;
 	padding: 15px;
@@ -23,6 +23,8 @@ body {
 	margin: 0 auto;
 	transition: background-color 0.3s ease, color 0.3s ease;
 }
+
+body { max-width: 1600px; }
 
 body hr {
 	border-style: none;
@@ -147,7 +149,7 @@ input[disabled] { pointer-events: none; cursor: not-allowed; }
 .half {
 	display: block;
 	float: left;
-	width: 48%;
+	width: 49.75%;
 	min-width: 300px;
 }
 
@@ -284,7 +286,7 @@ input[disabled] { pointer-events: none; cursor: not-allowed; }
 .colorboard {
 	display: block;
 	float: right;
-	width: 48%;
+	width: 49.75%;
 }
 
 .colorboard .colorpad {
@@ -761,7 +763,7 @@ input[type="file"] {
 	 RESPONSIVE LAYER (Float & Percentages only)
 	 ========================================================================== */
 
-@media (max-width: 1500px) {
+@media (max-width: 1599px) {
 	.colorboard .colorpad .color-pair { width: 24.28%; margin: 2px 0.36%; }
 }
 
