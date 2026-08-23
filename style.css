@@ -17,14 +17,16 @@
 html, body {
 	font-family: var(--main-font);
 	font-size: 14px;
-	padding: 15px;
 	background-color: var(--bg-color);
 	color: var(--text-color);
-	margin: 0 auto;
 	transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-body { max-width: 1600px; }
+body {
+    padding: 15px;
+    margin: 0 auto;
+    max-width: 1550px;
+}
 
 body hr {
 	border-style: none;
@@ -763,7 +765,7 @@ input[type="file"] {
 	 RESPONSIVE LAYER (Float & Percentages only)
 	 ========================================================================== */
 
-@media (max-width: 1599px) {
+@media (max-width: 1550px) {
 	.colorboard .colorpad .color-pair { width: 24.28%; margin: 2px 0.36%; }
 }
 
