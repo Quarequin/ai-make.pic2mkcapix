@@ -1,3 +1,6 @@
+User-agent: *
+Disallow: /pack/
+
 User-agent: Googlebot
 Disallow: /
 
