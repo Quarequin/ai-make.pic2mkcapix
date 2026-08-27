@@ -1192,7 +1192,7 @@ async function copyOutputString(value) {
 		try {
 			await Promise.race([
 				navigator.clipboard.writeText(value),
-				new Promise((resolve, reject) => setTimeout(() => reject(new Error("Clipboard API timeout.")), 1500))
+				new Promise((resolve, reject) => setTimeout(() => reject(new Error("Clipboard API timeout.")), 3000))
 			]);
 			return;
 		} catch (error) {
@@ -1213,6 +1213,7 @@ async function copyOutputString(value) {
 	if (!copied) {
 		throw new Error("Denied copy.");
 	}
+	return copied;
 }
 
 copyButton.addEventListener("click", async function(e) {
@@ -1222,8 +1223,8 @@ copyButton.addEventListener("click", async function(e) {
 		return;
 	}
 	try {
-		await copyOutputString(getOutputString(getActiveOutputName()));
-		copyButton.textContent = "Copied!";
+		const copied = await copyOutputString(getOutputString(getActiveOutputName()));
+		copyButton.textContent = copied ? "Copied!" : "Unable to Copy to clipboard.";
 		setTimeout(() => {
 			copyButton.textContent = "Copy to Clipboard";
 		}, 2e3);
