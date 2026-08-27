@@ -44,46 +44,47 @@ const ASCII_CHARSETS = {
 	dense:	" .'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$".split('')
 };
 
-/*export*/ function exportAscii(indexMap, w, h, rgbPalette, charsetKey, asciiCols) {
+/*export*/ function buildAsciiLine(row, w, h, indexMap, rgbPalette, charsetKey, asciiCols) {
 	const chars = ASCII_CHARSETS[charsetKey] || ASCII_CHARSETS.standard;
 	const maxLevels = chars.length - 1;
-	const colCount = Math.min(asciiCols, w);
+	const colCount = Math.max(1, Math.min(asciiCols, w));
 	const charW = w / colCount;
 	const charH = charW * 2;
-	const rowCount = Math.max(1, Math.round(h / charH));
-	let result = '';
-
-	for (let row = 0; row < rowCount; row++) {
-		let line = '';
-		for (let col = 0; col < colCount; col++) {
-			const x0 = (col * charW) | 0;
-			const y0 = (row * charH) | 0;
-			const x1 = Math.min(w, Math.ceil((col + 1) * charW));
-			const y1 = Math.min(h, Math.ceil((row + 1) * charH));
-			let totalLum = 0, count = 0, hasOpaque = false;
-
-			for (let py = y0; py < y1; py++) {
-				const rowOff = py * w;
-				for (let px = x0; px < x1; px++) {
-					const pIdx = indexMap[rowOff + px];
-					if (pIdx !== 0) {
-						const c = rgbPalette[pIdx];
-						totalLum += 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
-						hasOpaque = true;
-					}
-					count++;
+	let line = '';
+	for (let col = 0; col < colCount; col++) {
+		const x0 = (col * charW) | 0;
+		const y0 = (row * charH) | 0;
+		const x1 = Math.min(w, Math.ceil((col + 1) * charW));
+		const y1 = Math.min(h, Math.ceil((row + 1) * charH));
+		let totalLum = 0, count = 0, hasOpaque = false;
+		for (let py = y0; py < y1; py++) {
+			const rowOff = py * w;
+			for (let px = x0; px < x1; px++) {
+				const pIdx = indexMap[rowOff + px];
+				if (pIdx !== 0) {
+					const c = rgbPalette[pIdx];
+					totalLum += 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+					hasOpaque = true;
 				}
+				count++;
 			}
-
-			if (!hasOpaque) {
-				line += ' ';
-				continue;
-			}
-			const avgLum = count > 0 ? totalLum / count : 0;
-			const charIdx = Math.round((avgLum / 255) * maxLevels);
-			line += chars[charIdx];
 		}
-		result += line + '\n';
+		if (!hasOpaque) {
+			line += ' ';
+			continue;
+		}
+		const avgLum = count > 0 ? totalLum / count : 0;
+		line += chars[Math.round((avgLum / 255) * maxLevels)];
+	}
+	return line;
+}
+
+function exportAscii(indexMap, w, h, rgbPalette, charsetKey, asciiCols) {
+	const colCount = Math.max(1, Math.min(asciiCols, w));
+	const rowCount = Math.max(1, Math.round(h / (w / colCount * 2)));
+	let result = '';
+	for (let row = 0; row < rowCount; row++) {
+		result += buildAsciiLine(row, w, h, indexMap, rgbPalette, charsetKey, asciiCols) + '\n';
 	}
 	return result;
 }
@@ -164,10 +165,10 @@ function buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable) {
 // ============================================================
 
 // ---- SOLID (no dithering) ----
-async function modeSolid(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval) {
+async function modeSolid(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, onRow) {
 	const indexMap = new Uint8Array(w * h);
 	const cache = new Map();
-	let partialStr = "img`\n";
+	let partialStr = onRow ? "" : "img`\n";
 	for (let y = 0; y < h; y++) {
 		const rowBase = y * w;
 		for (let x = 0; x < w; x++) {
@@ -176,22 +177,23 @@ async function modeSolid(data, w, h, rgbPalette, outData, onProgress, tmpTable, 
 				indexMap[px] = cachedFindNearest(data[srcIdx], data[srcIdx + 1], data[srcIdx + 2], rgbPalette, cache);
 			}
 		}
-		partialStr += buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable);
+		const rowString = buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable);
+		if (onRow) await onRow(y, rowString.slice(0, -1), indexMap); else partialStr += rowString;
 		if (y % progressInterval === 0 || y === h - 1) {
 			await onProgress(((y + 1) * 100 / h).toFixed(4));
 		}
 	}
-	return { hexString: partialStr + "`", indexMap };
+	return { hexString: onRow ? "" : partialStr + "`", indexMap };
 }
 
 // ---- ORDERED BAYER (enhanced with 1D error diffusion for smoother blending) ----
-async function modeBayer(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, bayerMatrix, matrixSize) {
+async function modeBayer(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, bayerMatrix, matrixSize, onRow) {
 	const indexMap = new Uint8Array(w * h);
 	const cache = new Map();
 	const mask = matrixSize - 1;
 	const invSizeSq = 1 / (matrixSize * matrixSize);
 	const spread = 72; // Increased from 48 for stronger dithering blend
-	let partialStr = "img`\n";
+	let partialStr = onRow ? "" : "img`\n";
 	for (let y = 0; y < h; y++) {
 		const rowBase = y * w;
 		const by = (y & mask) * matrixSize;
@@ -213,22 +215,23 @@ async function modeBayer(data, w, h, rgbPalette, outData, onProgress, tmpTable, 
 				carryR = carryG = carryB = 0;
 			}
 		}
-		partialStr += buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable);
+		const rowString = buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable);
+		if (onRow) await onRow(y, rowString.slice(0, -1), indexMap); else partialStr += rowString;
 		if (y % progressInterval === 0 || y === h - 1) {
 			await onProgress(((y + 1) * 100 / h).toFixed(4));
 		}
 	}
-	return { hexString: partialStr + "`", indexMap };
+	return { hexString: onRow ? "" : partialStr + "`", indexMap };
 }
 
 // ---- BLUE NOISE (enhanced with 1D error diffusion for smoother blending) ----
-async function modeBlueNoise(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, noiseMatrix, matrixSize) {
+async function modeBlueNoise(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, noiseMatrix, matrixSize, onRow) {
 	const indexMap = new Uint8Array(w * h);
 	const cache = new Map();
 	const mask = matrixSize - 1;
 	const inv255 = 1 / 255;
 	const spread = 80; // Increased from 52 for stronger dithering blend
-	let partialStr = "img`\n";
+	let partialStr = onRow ? "" : "img`\n";
 	for (let y = 0; y < h; y++) {
 		const rowBase = y * w;
 		const ny = (y & mask) * matrixSize;
@@ -250,21 +253,22 @@ async function modeBlueNoise(data, w, h, rgbPalette, outData, onProgress, tmpTab
 				carryR = carryG = carryB = 0;
 			}
 		}
-		partialStr += buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable);
+		const rowString = buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable);
+		if (onRow) await onRow(y, rowString.slice(0, -1), indexMap); else partialStr += rowString;
 		if (y % progressInterval === 0 || y === h - 1) {
 			await onProgress(((y + 1) * 100 / h).toFixed(4));
 		}
 	}
-	return { hexString: partialStr + "`", indexMap };
+	return { hexString: onRow ? "" : partialStr + "`", indexMap };
 }
 
 // ---- FLOYD-STEINBERG ERROR DIFFUSION ----
-async function modeFloydSteinberg(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval) {
+async function modeFloydSteinberg(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, onRow) {
 	const indexMap = new Uint8Array(w * h);
 	const sBuf = new Float32Array(data);
 	const cache = new Map();
 	const inv16 = 1 / 16;
-	let partialStr = "img`\n";
+	let partialStr = onRow ? "" : "img`\n";
 	for (let y = 0; y < h; y++) {
 		const rowBase = y * w;
 		for (let x = 0; x < w; x++) {
@@ -300,18 +304,19 @@ async function modeFloydSteinberg(data, w, h, rgbPalette, outData, onProgress, t
 				}
 			}
 		}
-		partialStr += buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable);
+		const rowString = buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable);
+		if (onRow) await onRow(y, rowString.slice(0, -1), indexMap); else partialStr += rowString;
 		if (y % progressInterval === 0 || y === h - 1) {
 			await onProgress(((y + 1) * 100 / h).toFixed(4));
 		}
 	}
-	return { hexString: partialStr + "`", indexMap };
+	return { hexString: onRow ? "" : partialStr + "`", indexMap };
 }
 
 // ============================================================
 // MAIN PIPELINE ROUTER
 // ============================================================
-/*export*/ async function runConversionPipeline({ data, w, h, mode, subPixelOption, rgbPalette, outImgData, onProgress, hasAlpha }) {
+/*export*/ async function runConversionPipeline({ data, w, h, mode, subPixelOption, rgbPalette, outImgData, onProgress, onRow, hasAlpha }) {
 	const totalPx4 = data.length;
 	const colorCount = rgbPalette.length;
 	const tmpTable = CHAR_TABLE; //colorCount > B32_TABLE.length ? B64_TABLE : (colorCount > HEX_TABLE.length ? B32_TABLE : HEX_TABLE);
@@ -332,22 +337,22 @@ async function modeFloydSteinberg(data, w, h, rgbPalette, outData, onProgress, t
 
 	switch (mode) {
 		case "solid":
-			return await modeSolid(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval);
+			return await modeSolid(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, onRow);
 		case "bayer4":
-			return await modeBayer(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BAYER4, 4);
+			return await modeBayer(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BAYER4, 4, onRow);
 		case "bayer8":
-			return await modeBayer(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BAYER8, 8);
+			return await modeBayer(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BAYER8, 8, onRow);
 		case "bayer16":
-			return await modeBayer(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BAYER16, 16);
+			return await modeBayer(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BAYER16, 16, onRow);
 		case "blue8":
-			return await modeBlueNoise(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BLUE8, 8);
+			return await modeBlueNoise(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BLUE8, 8, onRow);
 		case "blue16":
-			return await modeBlueNoise(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BLUE16, 16);
+			return await modeBlueNoise(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BLUE16, 16, onRow);
 		case "blue32":
-			return await modeBlueNoise(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BLUE32, 32);
+			return await modeBlueNoise(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BLUE32, 32, onRow);
 		case "error":
-			return await modeFloydSteinberg(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval);
+			return await modeFloydSteinberg(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, onRow);
 		default:
-			return await modeSolid(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval);
+			return await modeSolid(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, onRow);
 	}
 }

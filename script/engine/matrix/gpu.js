@@ -271,7 +271,7 @@ function createProgram(gl, vsSource, fsSource) {
 	// ============================================================
 	// MAIN RENDER METHOD
 	// ============================================================
-	render({ data, w, h, mode, rgbPalette, outImgData }) {
+	async render({ data, w, h, mode, rgbPalette, outImgData, onRow }) {
 		const gl = this.gl;
 
 		// The GL framebuffer's backing store size follows canvas.width/
@@ -346,7 +346,7 @@ function createProgram(gl, vsSource, fsSource) {
 		const carryStrength = 0.6;
 		const clampByte = (v) => v < 0 ? 0 : (v > 255 ? 255 : v);
 
-		let partialStr = "img`\n";
+		let partialStr = onRow ? "" : "img`\n";
 		for (let y = 0; y < h; y++) {
 			let rowStr = "";
 			const rowBase = y * w;
@@ -384,14 +384,14 @@ function createProgram(gl, vsSource, fsSource) {
 					outData[off + 2] = c.b; outData[off + 3] = c.a !== undefined ? c.a : 255;
 				}
 			}
-			partialStr += rowStr + "\n";
+			if (onRow) await onRow(y, rowStr, indexMap); else partialStr += rowStr + "\n";
 		}
 
-		return { hexString: partialStr + "`", indexMap };
+		return { hexString: onRow ? "" : partialStr + "`", indexMap };
 	}
 }
 
-/*export*/ async function runGLPipeline({ canvas, data, w, h, mode, rgbPalette, outImgData, onProgress, hasAlpha }) {
+/*export*/ async function runGLPipeline({ canvas, data, w, h, mode, rgbPalette, outImgData, onProgress, onRow, hasAlpha }) {
 	const engine = new GLEngine(canvas);
 	// GPU renders all at once — simulate progress
 	onProgress("25.0000");
@@ -402,7 +402,7 @@ function createProgram(gl, vsSource, fsSource) {
 	const activePalette = hasAlpha
 		? rgbPalette
 		: rgbPalette.map((c, i) => (i === 0 ? c : { r: c.r, g: c.g, b: c.b, a: 255 }));
-	const result = engine.render({ data, w, h, mode, rgbPalette: activePalette, outImgData });
+	const result = await engine.render({ data, w, h, mode, rgbPalette: activePalette, outImgData, onRow });
 	onProgress("100.0000");
 	return result;
 }

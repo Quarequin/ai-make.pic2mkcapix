@@ -777,6 +777,9 @@ parametersForm.addEventListener("submit", async function (e) {
 		const outImgData = ctx.createImageData(w, h);
 
 		const engine = engineSelect.value;
+		const asciiCols = parseInt(asciiWidthInput.value) || 80;
+		const textOutput = createProcessedTextOutput(w, h, asciiEnableCheck.checked, asciiCols);
+		textOutput.startStatic();
 		let result;
 		// alphaColor only takes effect when the source image itself has
 		// transparency — see matrixcl.js runConversionPipeline / matrixgl.js runGLPipeline.
@@ -791,6 +794,7 @@ parametersForm.addEventListener("submit", async function (e) {
 				rgbPalette,
 				outImgData,
 				hasAlpha,
+				onRow: textOutput.onRow,
 				onProgress: async (pct) => {
 					runButton.textContent = `Converting... ${pct}%`;
 					statusDiv.textContent = `Processing GPU pipeline... ${pct}%`;
@@ -801,32 +805,20 @@ parametersForm.addEventListener("submit", async function (e) {
 			});
 			ctx.putImageData(outImgData, 0, 0);
 		} else {
-			result = await runCPUPipelineFallback(imgData, w, h, outImgData, null, hasAlpha);
+			result = await runCPUPipelineFallback(imgData, w, h, outImgData, null, hasAlpha, textOutput.onRow);
 		}
 		ctx.putImageData(outImgData, 0, 0);
+		await textOutput.finishStatic();
 		setButtonState("almost");
-
-		// Progressive textarea output: append line by line
-		await progressiveTextOutput(result.hexString, progressInterval);
 
 		lastIndexMap = result.indexMap;
 		lastW = w;
 		lastH = h;
 
 		if (asciiEnableCheck.checked) {
-			const asciiCols = parseInt(asciiWidthInput.value) || 80;
-			const charsetKey = asciiCharsetSelect.value;
-			asciiOutputTA.value = exportAscii(
-				lastIndexMap,
-				lastW,
-				lastH,
-				rgbPalette,
-				charsetKey,
-				asciiCols,
-			);
 			addToSessionLog(
 				"ASCII",
-				`ASCII output generated (${asciiCols} cols, charset: ${charsetKey}).`,
+				`ASCII output generated during image processing (${asciiCols} cols, charset: ${asciiCharsetSelect.value}).`,
 			);
 		}
 
@@ -848,37 +840,118 @@ parametersForm.addEventListener("submit", async function (e) {
 	}
 });
 
-// Progressive output: show result line by line in textarea
-async function progressiveTextOutput(fullString, progressInterval) {
-	isTextProcessing = true;
-	stopTextProcessingFlag = false;
-	const lines = fullString.split("\n");
-	const totalLines = lines.length;
-	textarea.value = "";
-	let curstring = "";
-	let resultString = "";
-	for (let i = 0; i < totalLines; i++) {
-		if (stopTextProcessingFlag) {
-			if (i < totalLines) {
-				resultString += lines.slice(i).join("\n");
+// Streaming output writers: each logical output line is inserted separately.
+function createLineWriter(target) {
+	let lineCount = 0;
+	const insert = (text) => {
+		if (typeof target.setRangeText === "function") {
+			const end = target.value.length;
+			target.setRangeText(text, end, end, "end");
+		} else {
+			target.value = target.value + text;
+		}
+	};
+	return {
+		reset(value = "") {
+			target.value = value;
+			lineCount = value ? String(value).split(/\r\n|\r|\n/).length : 0;
+		},
+		appendLine(line) {
+			const safeLine = String(line ?? "").replace(/[\r\n]+/g, "");
+			if (lineCount) insert("\n");
+			insert(safeLine);
+			lineCount += 1;
+		},
+	};
+}
+
+function createAsciiRowStream(width, height, writer, enabled, asciiCols) {
+	if (!enabled) return { beginFrame() {}, async onSourceRow() {}, finish() {} };
+	const columns = Math.max(1, Math.min(asciiCols, width));
+	const charWidth = width / columns;
+	const charHeight = charWidth * 2;
+	const rowCount = Math.max(1, Math.round(height / charHeight));
+	let nextRow = 0;
+	let latestIndexMap = null;
+	return {
+		beginFrame(label) {
+			nextRow = 0;
+			latestIndexMap = null;
+			if (label) writer.appendLine(label);
+		},
+		async onSourceRow(sourceRow, indexMap) {
+			latestIndexMap = indexMap;
+			while (nextRow < rowCount) {
+				const rowEnd = Math.min(height, Math.ceil((nextRow + 1) * charHeight));
+				if (sourceRow + 1 < rowEnd) break;
+				writer.appendLine(buildAsciiLine(nextRow, width, height, indexMap, rgbPalette, asciiCharsetSelect.value, columns));
+				nextRow += 1;
 			}
-			curstring = resultString;
-			break;
-		}
-		resultString += lines[i] + (i < totalLines - 1 ? "\n" : "");
-		if (i % (progressInterval | 0) === 0 || i === totalLines - 1) {
-			curstring = resultString;
-			//textarea.scrollTop = textarea.scrollHeight;
-			const pct = ((i + 1) * 100 / totalLines).toFixed(4);
-			statusDiv.textContent = `Converting to text output... ${pct}%`;
-			textarea.value = statusDiv.textContent;
-			runButton.textContent = `Converting... ${pct}%`;
-			await new Promise((r) => setTimeout(r, 0));
-		}
-	}
-	textarea.value = curstring;
-	isTextProcessing = false;
-	copyButton.textContent = "Copy to Clipboard";
+		},
+		finish() {
+			while (nextRow < rowCount) {
+				writer.appendLine(buildAsciiLine(nextRow, width, height, latestIndexMap || new Uint8Array(width * height), rgbPalette, asciiCharsetSelect.value, columns));
+				nextRow += 1;
+			}
+		},
+	};
+}
+
+async function yieldOutputFrame() {
+	await new Promise((resolve) => {
+		if (typeof requestAnimationFrame === "function") requestAnimationFrame(resolve);
+		else setTimeout(resolve, 0);
+	});
+}
+
+function createProcessedTextOutput(width, height, asciiEnabled, asciiCols) {
+	const makecodeWriter = createLineWriter(textarea);
+	const asciiWriter = createLineWriter(asciiOutputTA);
+	const asciiRows = createAsciiRowStream(width, height, asciiWriter, asciiEnabled, asciiCols);
+	let rowsSinceYield = 0;
+	return {
+		startStatic() {
+			makecodeWriter.reset();
+			asciiWriter.reset();
+			makecodeWriter.appendLine("img`");
+			asciiRows.beginFrame();
+			rowsSinceYield = 0;
+		},
+		startAnimation() {
+			makecodeWriter.reset("[");
+			asciiWriter.reset();
+			rowsSinceYield = 0;
+		},
+		beginFrame(frameIndex, frameCount) {
+			if (frameIndex > 1) {
+				makecodeWriter.appendLine(",");
+				if (asciiEnabled) asciiWriter.appendLine("");
+			}
+			makecodeWriter.appendLine("img`");
+			asciiRows.beginFrame(`Frame ${frameIndex}${frameCount ? `/${frameCount}` : ""}:`);
+			rowsSinceYield = 0;
+		},
+		async onRow(rowIndex, rowString, indexMap) {
+			makecodeWriter.appendLine(rowString);
+			await asciiRows.onSourceRow(rowIndex, indexMap);
+			rowsSinceYield += 1;
+			if (rowsSinceYield >= 16) {
+				rowsSinceYield = 0;
+				await yieldOutputFrame();
+			}
+		},
+		finishStatic() {
+			makecodeWriter.appendLine("`");
+			asciiRows.finish();
+		},
+		finishFrame() {
+			makecodeWriter.appendLine("`");
+			asciiRows.finish();
+		},
+		finishAnimation() {
+			makecodeWriter.appendLine("]");
+		},
+	};
 }
 
 async function processAnimation(w, h) {
@@ -889,51 +962,46 @@ async function processAnimation(w, h) {
 	const frameCount = source.frameCount || stream.frameCount || 0;
 	const writer = createAnimatedOutputWriter(sourceExtension, { width: w, height: h, repeat, frameCount });
 	const engine = engineSelect.value;
+	const asciiCols = parseInt(asciiWidthInput.value) || 80;
+	const textOutput = createProcessedTextOutput(w, h, asciiEnableCheck.checked, asciiCols);
+	textOutput.startAnimation();
 	let previousIndexMap = null;
 	let index = 0;
-	let textStarted = false;
-	let textChars = 1;
-	let textTruncated = false;
-	const maxTextChars = 4 * 1024 * 1024;
-	textarea.value = '[';
 	for await (const frame of stream) {
+		const frameNumber = index + 1;
+		const totalLabel = frameCount ? `/${frameCount}` : '';
+		textOutput.beginFrame(frameNumber, frameCount);
 		ctx.globalCompositeOperation = 'copy';
 		ctx.clearRect(0, 0, w, h);
+		// Animation decoders yield a composited screen. This preserves the
+		// latest frame when the source frame is a delta/overlay rectangle.
 		ctx.drawImage(frame.image, 0, 0, w, h);
 		ctx.globalCompositeOperation = 'source-over';
 		const imgData = ctx.getImageData(0, 0, w, h);
 		const outImgData = ctx.createImageData(w, h);
 		const hasAlpha = imageDataHasAlpha(imgData.data);
-		const totalLabel = frameCount ? `/${frameCount}` : '';
+		const onRow = textOutput.onRow;
 		const result = engine === 'gpu'
-			? await runGLPipeline({ canvas, data: imgData.data, w, h, mode: modeSelect.value, rgbPalette, outImgData, hasAlpha, onProgress: async () => {} })
-			: await runCPUPipelineFallback(imgData, w, h, outImgData, `Frame: ${index+1}${totalLabel}`, hasAlpha);
+			? await runGLPipeline({ canvas, data: imgData.data, w, h, mode: modeSelect.value, rgbPalette, outImgData, hasAlpha, onRow, onProgress: async (pct) => {
+				runButton.textContent = `Converting frame ${frameNumber}${totalLabel}: ${pct}%`;
+				statusDiv.textContent = `Processing frame ${frameNumber}${totalLabel}: ${pct}%`;
+				await yieldOutputFrame();
+			} })
+			: await runCPUPipelineFallback(imgData, w, h, outImgData, `Frame: ${frameNumber}${totalLabel}`, hasAlpha, onRow);
 		const fullIndexMap = result.indexMap instanceof Uint8Array ? result.indexMap : new Uint8Array(result.indexMap);
 		const delta = makeOutputDelta(fullIndexMap, previousIndexMap, w, h, frame);
 		previousIndexMap = fullIndexMap;
 		ctx.putImageData(outImgData, 0, 0);
 		await writer.add({ ...delta, delay: frame.delay, disposal: frame.disposal ?? 0, compositionMode: delta.changedOnly ? 'overlay' : 'replace' });
-//		if (!textTruncated) {
-			const textPiece = `${textStarted ? ',\n' : '\n'}${result.hexString}`;
-//			if (textChars + textPiece.length <= maxTextChars) {
-				textarea.value += textPiece;
-				textChars += textPiece.length;
-//			} else {
-//				textarea.value += '\n/* text output truncated for memory safety; image frames continue */';
-//				textTruncated = true;
-//			}
-//		}
-		textStarted = true;
+		await textOutput.finishFrame();
 		index += 1;
-		if (engine === 'gpu') {
-			runButton.textContent = `Converting frame ${index}${totalLabel}...`;
-			statusDiv.textContent = `Processing frame ${index}${totalLabel}...`;
-		}
+		runButton.textContent = `Converting frame ${index}${totalLabel}...`;
+		statusDiv.textContent = `Processing frame ${index}${totalLabel}...`;
 		releaseFrame(frame);
-		await new Promise((resolve) => requestAnimationFrame(resolve));
+		await yieldOutputFrame();
 	}
 	if (!index) throw new Error('Animation stream returned no frames.');
-	if (!textTruncated) textarea.value += '\n]';
+	textOutput.finishAnimation();
 	processedAnimation = {
 		mimeType: originalMimeType,
 		width: w,
@@ -941,7 +1009,7 @@ async function processAnimation(w, h) {
 		frameCount: index,
 		repeat,
 		streamed: true,
-		textTruncated,
+		asciiFrames: asciiEnableCheck.checked,
 	};
 	setOutputBlob(await writer.finish());
 	setButtonState('almost');
@@ -991,7 +1059,7 @@ function imageDataHasAlpha(data) {
 	return false;
 }
 
-async function runCPUPipelineFallback(imgData, w, h, outImgData, exstatus, hasAlpha = imageDataHasAlpha(imgData.data)) {
+async function runCPUPipelineFallback(imgData, w, h, outImgData, exstatus, hasAlpha = imageDataHasAlpha(imgData.data), onRow) {
 	return runConversionPipeline({
 		data: imgData.data,
 		w,
@@ -1001,6 +1069,7 @@ async function runCPUPipelineFallback(imgData, w, h, outImgData, exstatus, hasAl
 		rgbPalette,
 		outImgData,
 		hasAlpha,
+		onRow,
 		onProgress: async (progressPercent) => {
 			ctx.putImageData(outImgData, 0, 0);
 			runButton.textContent = `${exstatus?`${exstatus}, `:""}Converting... ${progressPercent}%`;
