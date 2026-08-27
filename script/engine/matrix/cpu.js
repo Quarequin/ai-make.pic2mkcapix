@@ -1,358 +1,171 @@
-// matrixcl.js — CPU PixelArt Conversion Engine (Optimized)
-// Modular pipeline: each dithering mode is a standalone function.
-// Pre-computed Bayer & Blue Noise matrices embedded for zero runtime overhead.
+const clamp = t => t < 0 ? 0 : t > 255 ? 255 : t, COLOR_CACHE_LIMIT = 4096;
 
-const clamp = (val) => val < 0 ? 0 : (val > 255 ? 255 : val);
-
-// ============================================================
-// COLOR MATCHING ENGINE
-// ============================================================
-/*export*/ function findNearestColor(r, g, b, rgbPalette) {
-	let minDist = Infinity, nearestIndex = 1;
-	const len = rgbPalette.length;
-	for (let i = 1; i < len; i++) {
-		const p = rgbPalette[i];
-		const dr = r - p.r, dg = g - p.g, db = b - p.b;
-		const dist = dr * dr + dg * dg + db * db;
-		if (dist < minDist) {
-			minDist = dist;
-			nearestIndex = i;
-			if (dist === 0) break;
-		}
+function findNearestColor(t, n, e, i) {
+	let o = 1 / 0, a = 1;
+	for (let r = 1; r < i.length; r += 1) {
+		const l = i[r], c = t - l.r, s = n - l.g, u = e - l.b, d = c * c + s * s + u * u;
+		if (d < o && (o = d, a = r, 0 === d)) break;
 	}
-	return nearestIndex;
+	return a;
 }
 
-function cachedFindNearest(r, g, b, rgbPalette, cache) {
-	const key = ((r & 0xff) << 16) | ((g & 0xff) << 8) | (b & 0xff);
-	let idx = cache.get(key);
-	if (idx === undefined) {
-		idx = findNearestColor(r, g, b, rgbPalette);
-		cache.set(key, idx);
-	}
-	return idx;
+function cachedFindNearest(t, n, e, i, o) {
+	const a = (255 & t) << 16 | (255 & n) << 8 | 255 & e;
+	let r = o.get(a);
+	return void 0 !== r || (r = findNearestColor(t, n, e, i), o.size >= 4096 && o.clear(), 
+	o.set(a, r)), r;
 }
 
-// ============================================================
-// ASCII EXPORT ENGINE
-// ============================================================
 const ASCII_CHARSETS = {
-	standard: [' ', '·', '░', '▒', '▓', '█', '■', '▪', '●', '#', '@'],
-	block:	[' ', '·', '░', '▒', '▓', '█'],
-	alphanumeric: [' ', '.', ':', 'i', 'l', 'c', 'o', 'v', 'x', 'X', 'M', 'W', '#', '&', '@'],
-	minimal:	[' ', '.', ':', '-', '=', '+', '*', '#', '%', '@'],
-	dense:	" .'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$".split('')
+	standard: [ " ", "·", "░", "▒", "▓", "█", "■", "▪", "●", "#", "@" ],
+	block: [ " ", "·", "░", "▒", "▓", "█" ],
+	alphanumeric: [ " ", ".", ":", "i", "l", "c", "o", "v", "x", "X", "M", "W", "#", "&", "@" ],
+	minimal: [ " ", ".", ":", "-", "=", "+", "*", "#", "%", "@" ],
+	dense: " .'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$".split("")
 };
 
-/*export*/ function buildAsciiLine(row, w, h, indexMap, rgbPalette, charsetKey, asciiCols) {
-	const chars = ASCII_CHARSETS[charsetKey] || ASCII_CHARSETS.standard;
-	const maxLevels = chars.length - 1;
-	const colCount = Math.max(1, Math.min(asciiCols, w));
-	const charW = w / colCount;
-	const charH = charW * 2;
-	let line = '';
-	for (let col = 0; col < colCount; col++) {
-		const x0 = (col * charW) | 0;
-		const y0 = (row * charH) | 0;
-		const x1 = Math.min(w, Math.ceil((col + 1) * charW));
-		const y1 = Math.min(h, Math.ceil((row + 1) * charH));
-		let totalLum = 0, count = 0, hasOpaque = false;
-		for (let py = y0; py < y1; py++) {
-			const rowOff = py * w;
-			for (let px = x0; px < x1; px++) {
-				const pIdx = indexMap[rowOff + px];
-				if (pIdx !== 0) {
-					const c = rgbPalette[pIdx];
-					totalLum += 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
-					hasOpaque = true;
-				}
-				count++;
+function makeAsciiLumaTable(t) {
+	const n = new Float32Array(t.length);
+	for (let e = 1; e < t.length; e += 1) {
+		const i = t[e];
+		n[e] = .2126 * i.r + .7152 * i.g + .0722 * i.b;
+	}
+	return n;
+}
+
+function buildAsciiLine(t, n, e, i, o, a, r, l) {
+	const c = ASCII_CHARSETS[a] || ASCII_CHARSETS.standard, s = c.length - 1, u = Math.max(1, Math.min(r, n)), d = n / u, h = 2 * d, f = l || makeAsciiLumaTable(o);
+	let m = "";
+	for (let o = 0; o < u; o += 1) {
+		const a = o * d | 0, r = t * h | 0, l = Math.min(n, Math.ceil((o + 1) * d)), u = Math.min(e, Math.ceil((t + 1) * h));
+		let M = 0, b = 0, g = !1;
+		for (let t = r; t < u; t += 1) {
+			const e = t * n;
+			for (let t = a; t < l; t += 1) {
+				const n = i[e + t];
+				n && (M += f[n], g = !0), b += 1;
 			}
 		}
-		if (!hasOpaque) {
-			line += ' ';
+		m += g ? c[Math.round(M / b / 255 * s)] : " ";
+	}
+	return m;
+}
+
+function exportAscii(t, n, e, i, o, a) {
+	const r = Math.max(1, Math.min(a, n)), l = Math.max(1, Math.round(e / (n / r * 2))), c = makeAsciiLumaTable(i);
+	let s = "";
+	for (let a = 0; a < l; a += 1) s += buildAsciiLine(a, n, e, t, i, o, r, c) + "\n";
+	return s;
+}
+
+function applySubpixel(t, n, e, i) {
+	if ("solidIndexing" === e) {
+		const e = 255 / (i - 1 || 15), o = 1 / e;
+		for (let i = 0; i < n; i += 4) t[i + 3] < 128 || (t[i] = Math.min(255, Math.round(Math.round(t[i] * o) * e)), 
+		t[i + 1] = Math.min(255, Math.round(Math.round(t[i + 1] * o) * e)), t[i + 2] = Math.min(255, Math.round(Math.round(t[i + 2] * o) * e)));
+	} else if ("hinted" === e) for (let e = 0; e < n; e += 4) t[e + 3] < 128 || (t[e] = Math.min(255, 64 * Math.round(.015625 * t[e])), 
+	t[e + 1] = Math.min(255, 64 * Math.round(.015625 * t[e + 1])), t[e + 2] = Math.min(255, 64 * Math.round(.015625 * t[e + 2]))); else if ("antialias" === e || "smallAntiAliasing" === e) {
+		const i = "smallAntiAliasing" === e;
+		for (let e = 0; e < n - 4; e += 4) t[e + 3] < 128 || t[e + 7] < 128 || (i ? (t[e] = .75 * t[e] + .25 * t[e + 4] | 0, 
+		t[e + 1] = .75 * t[e + 1] + .25 * t[e + 5] | 0, t[e + 2] = .75 * t[e + 2] + .25 * t[e + 6] | 0) : (t[e] = t[e] + t[e + 4] >> 1, 
+		t[e + 1] = t[e + 1] + t[e + 5] >> 1, t[e + 2] = t[e + 2] + t[e + 6] >> 1));
+	} else if ("nearestNeighbor" === e) for (let e = 0; e < n; e += 4) t[e + 3] < 128 || (t[e] = t[e] < 64 ? 0 : t[e] > 192 ? 255 : t[e], 
+	t[e + 1] = t[e + 1] < 64 ? 0 : t[e + 1] > 192 ? 255 : t[e + 1], t[e + 2] = t[e + 2] < 64 ? 0 : t[e + 2] > 192 ? 255 : t[e + 2]);
+}
+
+function buildRowString(t, n, e, i, o, a, r) {
+	const l = t * n;
+	let c = "";
+	for (let t = 0; t < n; t += 1) {
+		const n = l + t, s = e[n];
+		c += a[s];
+		const u = n << 2;
+		if (!s) {
+			i[u] = i[u + 1] = i[u + 2] = i[u + 3] = 0;
 			continue;
 		}
-		const avgLum = count > 0 ? totalLum / count : 0;
-		line += chars[Math.round((avgLum / 255) * maxLevels)];
+		const d = o[s];
+		i[u] = d.r, i[u + 1] = d.g, i[u + 2] = d.b, i[u + 3] = r && void 0 !== d.a ? d.a : 255;
 	}
-	return line;
+	return c;
 }
 
-function exportAscii(indexMap, w, h, rgbPalette, charsetKey, asciiCols) {
-	const colCount = Math.max(1, Math.min(asciiCols, w));
-	const rowCount = Math.max(1, Math.round(h / (w / colCount * 2)));
-	let result = '';
-	for (let row = 0; row < rowCount; row++) {
-		result += buildAsciiLine(row, w, h, indexMap, rgbPalette, charsetKey, asciiCols) + '\n';
+async function modeDither(t, n, e, i, o, a, r, l, c, s, u, d, h, f) {
+	const m = new Uint8Array(n * e), M = new Map, b = null !== c, g = s - 1, A = 1 / u;
+	let p = h ? "" : "img`\n";
+	for (let u = 0; u < e; u += 1) {
+		const S = u * n, w = (u & g) * s;
+		let x = 0, E = 0, y = 0;
+		for (let e = 0; e < n; e += 1) {
+			const n = S + e, o = n << 2;
+			if (t[o + 3] < 128) {
+				b && (x = E = y = 0);
+				continue;
+			}
+			let a = t[o], r = t[o + 1], l = t[o + 2];
+			if (b) {
+				const t = (c[w + (e & g)] * A - .5) * d;
+				a = clamp(a + x + t), r = clamp(r + E + t), l = clamp(l + y + t);
+			}
+			const s = cachedFindNearest(a, r, l, i, M);
+			if (m[n] = s, b) {
+				const t = i[s];
+				x = .6 * (a - t.r), E = .6 * (r - t.g), y = .6 * (l - t.b);
+			}
+		}
+		const C = buildRowString(u, n, m, o, i, r, f);
+		h ? await h(u, C, m) : p += C + "\n", u % l !== 0 && u !== e - 1 || await a((100 * (u + 1) / e).toFixed(4));
 	}
-	return result;
+	return {
+		hexString: h ? "" : p + "`",
+		indexMap: m
+	};
 }
 
-// ============================================================
-// SUB-PIXEL PRE-PROCESSING
-// ============================================================
-function applySubpixel(data, totalPx4, subPixelOption, paletteLen) {
-	if (subPixelOption === "solidIndexing") {
-		const step = 255 / (paletteLen - 1 || 15), invStep = 1 / step;
-		for (let i = 0; i < totalPx4; i += 4) {
-			if (data[i + 3] >= 128) {
-				data[i]	 = Math.min(255, Math.round(Math.round(data[i]	 * invStep) * step));
-				data[i + 1] = Math.min(255, Math.round(Math.round(data[i + 1] * invStep) * step));
-				data[i + 2] = Math.min(255, Math.round(Math.round(data[i + 2] * invStep) * step));
-			}
-		}
-	} else if (subPixelOption === "hinted") {
-		for (let i = 0; i < totalPx4; i += 4) {
-			if (data[i + 3] >= 128) {
-				data[i]	 = Math.min(255, Math.round(data[i]	 * 0.015625) * 64);
-				data[i + 1] = Math.min(255, Math.round(data[i + 1] * 0.015625) * 64);
-				data[i + 2] = Math.min(255, Math.round(data[i + 2] * 0.015625) * 64);
-			}
-		}
-	} else if (subPixelOption === "antialias") {
-		for (let i = 0; i < totalPx4 - 4; i += 4) {
-			if (data[i + 3] >= 128 && data[i + 7] >= 128) {
-				data[i]	 = (data[i]	 + data[i + 4]) >> 1;
-				data[i + 1] = (data[i + 1] + data[i + 5]) >> 1;
-				data[i + 2] = (data[i + 2] + data[i + 6]) >> 1;
-			}
-		}
-	} else if (subPixelOption === "nearestNeighbor") {
-		for (let i = 0; i < totalPx4; i += 4) {
-			if (data[i + 3] >= 128) {
-				data[i]	 = data[i]	 < 64 ? 0 : (data[i]	 > 192 ? 255 : data[i]);
-				data[i + 1] = data[i + 1] < 64 ? 0 : (data[i + 1] > 192 ? 255 : data[i + 1]);
-				data[i + 2] = data[i + 2] < 64 ? 0 : (data[i + 2] > 192 ? 255 : data[i + 2]);
-			}
-		}
-	} else if (subPixelOption === "smallAntiAliasing") {
-		for (let i = 0; i < totalPx4 - 4; i += 4) {
-			if (data[i + 3] >= 128 && data[i + 7] >= 128) {
-				data[i]	 = (data[i]	 * 0.75 + data[i + 4] * 0.25) | 0;
-				data[i + 1] = (data[i + 1] * 0.75 + data[i + 5] * 0.25) | 0;
-				data[i + 2] = (data[i + 2] * 0.75 + data[i + 6] * 0.25) | 0;
-			}
-		}
-	}
-}
-
-// ============================================================
-// ROW STRING BUILDER (shared)
-// ============================================================
-function buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable) {
-	const rowBase = y * w;
-	let rowStr = "";
-	for (let x = 0; x < w; x++) {
-		const pi = rowBase + x;
-		const idx = indexMap[pi];
-		rowStr += tmpTable[idx];
-		const outIdx = pi << 2;
-		if (idx === 0) {
-			outData[outIdx] = 0; outData[outIdx + 1] = 0;
-			outData[outIdx + 2] = 0; outData[outIdx + 3] = 0;
-		} else {
-			const c = rgbPalette[idx];
-			outData[outIdx] = c.r; outData[outIdx + 1] = c.g;
-			outData[outIdx + 2] = c.b; outData[outIdx + 3] = c.a !== undefined ? c.a : 255;
-		}
-	}
-	return rowStr + "\n";
-}
-
-// ============================================================
-// DITHERING MODULES (modular — each is a standalone function)
-// ============================================================
-
-// ---- SOLID (no dithering) ----
-async function modeSolid(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, onRow) {
-	const indexMap = new Uint8Array(w * h);
-	const cache = new Map();
-	let partialStr = onRow ? "" : "img`\n";
-	for (let y = 0; y < h; y++) {
-		const rowBase = y * w;
-		for (let x = 0; x < w; x++) {
-			const px = rowBase + x, srcIdx = px << 2;
-			if (data[srcIdx + 3] >= 128) {
-				indexMap[px] = cachedFindNearest(data[srcIdx], data[srcIdx + 1], data[srcIdx + 2], rgbPalette, cache);
-			}
-		}
-		const rowString = buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable);
-		if (onRow) await onRow(y, rowString.slice(0, -1), indexMap); else partialStr += rowString;
-		if (y % progressInterval === 0 || y === h - 1) {
-			await onProgress(((y + 1) * 100 / h).toFixed(4));
-		}
-	}
-	return { hexString: onRow ? "" : partialStr + "`", indexMap };
-}
-
-// ---- ORDERED BAYER (enhanced with 1D error diffusion for smoother blending) ----
-async function modeBayer(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, bayerMatrix, matrixSize, onRow) {
-	const indexMap = new Uint8Array(w * h);
-	const cache = new Map();
-	const mask = matrixSize - 1;
-	const invSizeSq = 1 / (matrixSize * matrixSize);
-	const spread = 72; // Increased from 48 for stronger dithering blend
-	let partialStr = onRow ? "" : "img`\n";
-	for (let y = 0; y < h; y++) {
-		const rowBase = y * w;
-		const by = (y & mask) * matrixSize;
-		let carryR = 0, carryG = 0, carryB = 0;
-		const carryStrength = 0.6;
-		for (let x = 0; x < w; x++) {
-			const px = rowBase + x, srcIdx = px << 2;
-			if (data[srcIdx + 3] >= 128) {
-				const factor = (bayerMatrix[by + (x & mask)] * invSizeSq) - 0.5;
-				const r = clamp(data[srcIdx]	 + carryR + factor * spread);
-				const g = clamp(data[srcIdx + 1] + carryG + factor * spread);
-				const b = clamp(data[srcIdx + 2] + carryB + factor * spread);
-				indexMap[px] = cachedFindNearest(r, g, b, rgbPalette, cache);
-				const tc = rgbPalette[indexMap[px]];
-				carryR = (r - tc.r) * carryStrength;
-				carryG = (g - tc.g) * carryStrength;
-				carryB = (b - tc.b) * carryStrength;
-			} else {
-				carryR = carryG = carryB = 0;
-			}
-		}
-		const rowString = buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable);
-		if (onRow) await onRow(y, rowString.slice(0, -1), indexMap); else partialStr += rowString;
-		if (y % progressInterval === 0 || y === h - 1) {
-			await onProgress(((y + 1) * 100 / h).toFixed(4));
-		}
-	}
-	return { hexString: onRow ? "" : partialStr + "`", indexMap };
-}
-
-// ---- BLUE NOISE (enhanced with 1D error diffusion for smoother blending) ----
-async function modeBlueNoise(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, noiseMatrix, matrixSize, onRow) {
-	const indexMap = new Uint8Array(w * h);
-	const cache = new Map();
-	const mask = matrixSize - 1;
-	const inv255 = 1 / 255;
-	const spread = 80; // Increased from 52 for stronger dithering blend
-	let partialStr = onRow ? "" : "img`\n";
-	for (let y = 0; y < h; y++) {
-		const rowBase = y * w;
-		const ny = (y & mask) * matrixSize;
-		let carryR = 0, carryG = 0, carryB = 0;
-		const carryStrength = 0.6;
-		for (let x = 0; x < w; x++) {
-			const px = rowBase + x, srcIdx = px << 2;
-			if (data[srcIdx + 3] >= 128) {
-				const factor = (noiseMatrix[ny + (x & mask)] * inv255) - 0.5;
-				const r = clamp(data[srcIdx]	 + carryR + factor * spread);
-				const g = clamp(data[srcIdx + 1] + carryG + factor * spread);
-				const b = clamp(data[srcIdx + 2] + carryB + factor * spread);
-				indexMap[px] = cachedFindNearest(r, g, b, rgbPalette, cache);
-				const tc = rgbPalette[indexMap[px]];
-				carryR = (r - tc.r) * carryStrength;
-				carryG = (g - tc.g) * carryStrength;
-				carryB = (b - tc.b) * carryStrength;
-			} else {
-				carryR = carryG = carryB = 0;
-			}
-		}
-		const rowString = buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable);
-		if (onRow) await onRow(y, rowString.slice(0, -1), indexMap); else partialStr += rowString;
-		if (y % progressInterval === 0 || y === h - 1) {
-			await onProgress(((y + 1) * 100 / h).toFixed(4));
-		}
-	}
-	return { hexString: onRow ? "" : partialStr + "`", indexMap };
-}
-
-// ---- FLOYD-STEINBERG ERROR DIFFUSION ----
-async function modeFloydSteinberg(data, w, h, rgbPalette, outData, onProgress, tmpTable, progressInterval, onRow) {
-	const indexMap = new Uint8Array(w * h);
-	const sBuf = new Float32Array(data);
-	const cache = new Map();
-	const inv16 = 1 / 16;
-	let partialStr = onRow ? "" : "img`\n";
-	for (let y = 0; y < h; y++) {
-		const rowBase = y * w;
-		for (let x = 0; x < w; x++) {
-			const px = rowBase + x, idx = px << 2;
-			if (sBuf[idx + 3] >= 128) {
-				const oldR = clamp(sBuf[idx]), oldG = clamp(sBuf[idx + 1]), oldB = clamp(sBuf[idx + 2]);
-				const nIdx = cachedFindNearest(oldR, oldG, oldB, rgbPalette, cache);
-				indexMap[px] = nIdx;
-				const tc = rgbPalette[nIdx];
-				const errR = oldR - tc.r, errG = oldG - tc.g, errB = oldB - tc.b;
-				if (x + 1 < w) {
-					sBuf[idx + 4] += errR * 7 * inv16;
-					sBuf[idx + 5] += errG * 7 * inv16;
-					sBuf[idx + 6] += errB * 7 * inv16;
+async function modeFloydSteinberg(t, n, e, i, o, a, r, l, c, s) {
+	const u = new Uint8Array(n * e), d = new Float32Array(t), h = new Map;
+	let f = c ? "" : "img`\n";
+	for (let t = 0; t < e; t += 1) {
+		const m = t * n;
+		for (let o = 0; o < n; o += 1) {
+			const a = m + o, r = a << 2;
+			if (d[r + 3] < 128) continue;
+			const l = clamp(d[r]), c = clamp(d[r + 1]), s = clamp(d[r + 2]), f = cachedFindNearest(l, c, s, i, h);
+			u[a] = f;
+			const M = i[f], b = l - M.r, g = c - M.g, A = s - M.b;
+			if (o + 1 < n && (d[r + 4] += .4375 * b, d[r + 5] += .4375 * g, d[r + 6] += .4375 * A), 
+			t + 1 < e) {
+				if (o) {
+					const e = (t + 1) * n + o - 1 << 2;
+					d[e] += .1875 * b, d[e + 1] += .1875 * g, d[e + 2] += .1875 * A;
 				}
-				if (y + 1 < h) {
-					if (x - 1 >= 0) {
-						const n2 = ((y + 1) * w + (x - 1)) << 2;
-						sBuf[n2]	 += errR * 3 * inv16;
-						sBuf[n2 + 1] += errG * 3 * inv16;
-						sBuf[n2 + 2] += errB * 3 * inv16;
-					}
-					const n3 = ((y + 1) * w + x) << 2;
-					sBuf[n3]	 += errR * 5 * inv16;
-					sBuf[n3 + 1] += errG * 5 * inv16;
-					sBuf[n3 + 2] += errB * 5 * inv16;
-					if (x + 1 < w) {
-						const n4 = ((y + 1) * w + (x + 1)) << 2;
-						sBuf[n4]	 += errR * inv16;
-						sBuf[n4 + 1] += errG * inv16;
-						sBuf[n4 + 2] += errB * inv16;
-					}
+				const e = (t + 1) * n + o << 2;
+				if (d[e] += .3125 * b, d[e + 1] += .3125 * g, d[e + 2] += .3125 * A, o + 1 < n) {
+					const t = e + 4;
+					d[t] += .0625 * b, d[t + 1] += .0625 * g, d[t + 2] += .0625 * A;
 				}
 			}
 		}
-		const rowString = buildRowString(y, w, indexMap, outData, rgbPalette, tmpTable);
-		if (onRow) await onRow(y, rowString.slice(0, -1), indexMap); else partialStr += rowString;
-		if (y % progressInterval === 0 || y === h - 1) {
-			await onProgress(((y + 1) * 100 / h).toFixed(4));
-		}
+		const M = buildRowString(t, n, u, o, i, r, s);
+		c ? await c(t, M, u) : f += M + "\n", t % l !== 0 && t !== e - 1 || await a((100 * (t + 1) / e).toFixed(4));
 	}
-	return { hexString: onRow ? "" : partialStr + "`", indexMap };
+	return {
+		hexString: c ? "" : f + "`",
+		indexMap: u
+	};
 }
 
-// ============================================================
-// MAIN PIPELINE ROUTER
-// ============================================================
-/*export*/ async function runConversionPipeline({ data, w, h, mode, subPixelOption, rgbPalette, outImgData, onProgress, onRow, hasAlpha }) {
-	const totalPx4 = data.length;
-	const colorCount = rgbPalette.length;
-	const tmpTable = CHAR_TABLE; //colorCount > B32_TABLE.length ? B64_TABLE : (colorCount > HEX_TABLE.length ? B32_TABLE : HEX_TABLE);
-	const progressInterval = 1 + (Math.sqrt(h + w) * (h / w)) | 0;
+const DITHER_MODES = {
+	bayer4: [ BAYER4, 4, 16, 72 ],
+	bayer8: [ BAYER8, 8, 64, 72 ],
+	bayer16: [ BAYER16, 16, 256, 72 ],
+	blue8: [ BLUE8, 8, 255, 80 ],
+	blue16: [ BLUE16, 16, 255, 80 ],
+	blue32: [ BLUE32, 32, 255, 80 ]
+};
 
-	applySubpixel(data, totalPx4, subPixelOption, colorCount);
-
-	const outData = outImgData.data;
-
-	// alphaColor (a per-palette-slot transparency value, entered as an optional
-	// 4th hex byte e.g. #rrggbbaa) is only honored when the *source image*
-	// itself has a transparent background. On a fully opaque source there is
-	// nothing for that transparency to composite against, so it's forced back
-	// to fully opaque here rather than silently punching new holes in the output.
-	const activePalette = hasAlpha
-		? rgbPalette
-		: rgbPalette.map((c, i) => (i === 0 ? c : { r: c.r, g: c.g, b: c.b, a: 255 }));
-
-	switch (mode) {
-		case "solid":
-			return await modeSolid(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, onRow);
-		case "bayer4":
-			return await modeBayer(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BAYER4, 4, onRow);
-		case "bayer8":
-			return await modeBayer(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BAYER8, 8, onRow);
-		case "bayer16":
-			return await modeBayer(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BAYER16, 16, onRow);
-		case "blue8":
-			return await modeBlueNoise(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BLUE8, 8, onRow);
-		case "blue16":
-			return await modeBlueNoise(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BLUE16, 16, onRow);
-		case "blue32":
-			return await modeBlueNoise(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, BLUE32, 32, onRow);
-		case "error":
-			return await modeFloydSteinberg(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, onRow);
-		default:
-			return await modeSolid(data, w, h, activePalette, outData, onProgress, tmpTable, progressInterval, onRow);
-	}
+async function runConversionPipeline({data: t, w: n, h: e, mode: i, subPixelOption: o, rgbPalette: a, outImgData: r, onProgress: l, onRow: c, hasAlpha: s}) {
+	applySubpixel(t, t.length, o, a.length);
+	const u = r.data, d = CHAR_TABLE, h = 1 + Math.sqrt(e + n) * (e / n) | 0, f = DITHER_MODES[i];
+	return f ? modeDither(t, n, e, a, u, l, d, h, f[0], f[1], f[2], f[3], c, s) : "error" === i ? modeFloydSteinberg(t, n, e, a, u, l, d, h, c, s) : modeDither(t, n, e, a, u, l, d, h, null, 1, 1, 0, c, s);
 }

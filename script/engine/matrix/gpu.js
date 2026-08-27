@@ -1,408 +1,198 @@
-// matrixgl.js — GPU PixelArt Conversion Engine (WebGL 2.0)
-// Modular shader pipeline: each dithering mode is a standalone shader module.
-// Pre-computed Bayer & Blue Noise data embedded for zero runtime overhead.
+const VERTEX_SHADER = "\nattribute vec2 a_position;\nattribute vec2 a_texCoord;\nvarying vec2 v_texCoord;\nvoid main() {\n\tgl_Position = vec4(a_position, 0.0, 1.0);\n\tv_texCoord = a_texCoord;\n}", FRAG_BASE = "\nprecision highp float;\nvarying vec2 v_texCoord;\nuniform sampler2D u_image;\nuniform vec2 u_resolution;\n\nvec3 samplePixel() {\n\treturn texture2D(u_image, v_texCoord).rgb;\n}\n\nfloat getAlpha() {\n\treturn texture2D(u_image, v_texCoord).a;\n}\n", FRAG_SOLID = FRAG_BASE + "\nvoid main() {\n\tfloat alpha = getAlpha();\n\tif (alpha < 0.5) {\n\t\tgl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);\n\t\treturn;\n\t}\n\tgl_FragColor = vec4(samplePixel(), 1.0);\n}", FRAG_BAYER = FRAG_BASE + "\nuniform sampler2D u_bayerTex;\nuniform float u_bayerSize;\nuniform float u_spread;\n\nvoid main() {\n\tfloat alpha = getAlpha();\n\tif (alpha < 0.5) {\n\t\tgl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);\n\t\treturn;\n\t}\n\tvec2 px = v_texCoord * u_resolution;\n\tvec2 bayerUV = mod(px, u_bayerSize) / u_bayerSize;\n\tfloat factor = texture2D(u_bayerTex, bayerUV).r - 0.5;\n\tvec3 col = samplePixel() + factor * u_spread / 255.0;\n\tcol = clamp(col, 0.0, 1.0);\n\tgl_FragColor = vec4(col, 1.0);\n}", FRAG_BLUE = FRAG_BASE + "\nuniform sampler2D u_noise;\nuniform float u_spread;\nuniform vec2 u_noiseSize;\n\nvoid main() {\n\tfloat alpha = getAlpha();\n\tif (alpha < 0.5) {\n\t\tgl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);\n\t\treturn;\n\t}\n\tvec2 noiseUV = fract(v_texCoord * u_resolution / u_noiseSize);\n\tfloat factor = texture2D(u_noise, noiseUV).r - 0.5;\n\tvec3 col = samplePixel() + factor * u_spread / 255.0;\n\tcol = clamp(col, 0.0, 1.0);\n\tgl_FragColor = vec4(col, 1.0);\n}";
 
-const VERTEX_SHADER = `
-attribute vec2 a_position;
-attribute vec2 a_texCoord;
-varying vec2 v_texCoord;
-void main() {
-	gl_Position = vec4(a_position, 0.0, 1.0);
-	v_texCoord = a_texCoord;
-}`;
-
-// Base fragment shader: image sampling only. Palette quantization is
-// intentionally NOT done here — see the render()/JS-side comment for why.
-const FRAG_BASE = `
-precision highp float;
-varying vec2 v_texCoord;
-uniform sampler2D u_image;
-uniform vec2 u_resolution;
-
-vec3 samplePixel() {
-	return texture2D(u_image, v_texCoord).rgb;
+function compileShader(e, t, r) {
+	const a = e.createShader(t);
+	if (e.shaderSource(a, r), e.compileShader(a), !e.getShaderParameter(a, e.COMPILE_STATUS)) {
+		const t = e.getShaderInfoLog(a);
+		throw e.deleteShader(a), new Error("Shader compile error: " + t);
+	}
+	return a;
 }
 
-float getAlpha() {
-	return texture2D(u_image, v_texCoord).a;
-}
-`;
-
-// ---- SOLID MODE (no dithering — straight resample) ----
-const FRAG_SOLID = FRAG_BASE + `
-void main() {
-	float alpha = getAlpha();
-	if (alpha < 0.5) {
-		gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
-		return;
-	}
-	gl_FragColor = vec4(samplePixel(), 1.0);
-}`;
-
-// ---- BAYER MODE — outputs the resampled color plus the ordered-dither
-// offset, NOT yet snapped to the palette. Snapping (with the row-wise
-// error-carry that keeps this from looking like a raw tiled matrix — see
-// the note in render()) happens afterward in JS. ----
-const FRAG_BAYER = FRAG_BASE + `
-uniform sampler2D u_bayerTex;
-uniform float u_bayerSize;
-uniform float u_spread;
-
-void main() {
-	float alpha = getAlpha();
-	if (alpha < 0.5) {
-		gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
-		return;
-	}
-	vec2 px = v_texCoord * u_resolution;
-	vec2 bayerUV = mod(px, u_bayerSize) / u_bayerSize;
-	float factor = texture2D(u_bayerTex, bayerUV).r - 0.5;
-	vec3 col = samplePixel() + factor * u_spread / 255.0;
-	col = clamp(col, 0.0, 1.0);
-	gl_FragColor = vec4(col, 1.0);
-}`;
-
-// ---- BLUE NOISE MODE — same idea as Bayer above ----
-const FRAG_BLUE = FRAG_BASE + `
-uniform sampler2D u_noise;
-uniform float u_spread;
-uniform vec2 u_noiseSize;
-
-void main() {
-	float alpha = getAlpha();
-	if (alpha < 0.5) {
-		gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
-		return;
-	}
-	vec2 noiseUV = fract(v_texCoord * u_resolution / u_noiseSize);
-	float factor = texture2D(u_noise, noiseUV).r - 0.5;
-	vec3 col = samplePixel() + factor * u_spread / 255.0;
-	col = clamp(col, 0.0, 1.0);
-	gl_FragColor = vec4(col, 1.0);
-}`;
-
-// ---- Helper: compile shader ----
-function compileShader(gl, type, source) {
-	const shader = gl.createShader(type);
-	gl.shaderSource(shader, source);
-	gl.compileShader(shader);
-	if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-		const err = gl.getShaderInfoLog(shader);
-		gl.deleteShader(shader);
-		throw new Error("Shader compile error: " + err);
-	}
-	return shader;
+function createProgram(e, t, r) {
+	const a = compileShader(e, e.VERTEX_SHADER, t), n = compileShader(e, e.FRAGMENT_SHADER, r), o = e.createProgram();
+	if (e.attachShader(o, a), e.attachShader(o, n), e.linkProgram(o), !e.getProgramParameter(o, e.LINK_STATUS)) throw new Error("Program link error: " + e.getProgramInfoLog(o));
+	return o;
 }
 
-function createProgram(gl, vsSource, fsSource) {
-	const vs = compileShader(gl, gl.VERTEX_SHADER, vsSource);
-	const fs = compileShader(gl, gl.FRAGMENT_SHADER, fsSource);
-	const program = gl.createProgram();
-	gl.attachShader(program, vs);
-	gl.attachShader(program, fs);
-	gl.linkProgram(program);
-	if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-		throw new Error("Program link error: " + gl.getProgramInfoLog(program));
-	}
-	return program;
-}
-
-// ============================================================
-// GL ENGINE CLASS (modular)
-// ============================================================
-/*export*/ class GLEngine {
-
-	static checkWebGL(canvas) {
+class GLEngine {
+	static checkWebGL(e) {
 		try {
-			const c = canvas || document.createElement("canvas");
-			const opts = { premultipliedAlpha: false, alpha: true, antialias: false };
-			// Prefer a WebGL2 context where available (more consistent
-			// feature set / no functional downside here), falling back to
-			// WebGL1 for older browsers.
-			const gl = c.getContext('webgl2', opts)
-				|| c.getContext('webgl', opts)
-				|| c.getContext('experimental-webgl', opts);
-			return gl || null;
+			const t = e || document.createElement("canvas"), r = {
+				premultipliedAlpha: !1,
+				alpha: !0,
+				antialias: !1
+			};
+			return t.getContext("webgl2", r) || t.getContext("webgl", r) || t.getContext("experimental-webgl", r) || null;
 		} catch (e) {
 			return null;
 		}
 	}
-
-	constructor(canvas) {
-		// IMPORTANT: do NOT request a WebGL context on the canvas passed in
-		// from app.js — that element is already bound to a "2d" context
-		// there (canvas.getContext("2d", ...)) for the preview/output
-		// display. A <canvas> element can only ever be bound to ONE
-		// context type (2d XOR webgl) for its entire lifetime; once it's
-		// "2d", every later getContext('webgl'/'webgl2'/...) call on that
-		// same element returns null forever — which is what was throwing
-		// "WebGL not supported" even on GPUs/browsers that support it.
-		// GLEngine owns its own private offscreen canvas instead.
-		this._sourceCanvas = canvas; // kept only for reference, unused for GL
-		this.canvas = document.createElement("canvas");
-		const gl = GLEngine.checkWebGL(this.canvas);
-		if (!gl) throw new Error("WebGL not supported");
-		this.gl = gl;
-		this._initQuad();
-		this.programs = {};
-		this.textures = {};
+	constructor(e) {
+		this._sourceCanvas = e, this.canvas = document.createElement("canvas");
+		const t = GLEngine.checkWebGL(this.canvas);
+		if (!t) throw new Error("WebGL not supported");
+		this.gl = t, this._initQuad(), this.programs = {}, this.textures = {};
 	}
-
 	_initQuad() {
-		const gl = this.gl;
-		const vbo = gl.createBuffer();
-		gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-		gl.bufferData(gl.ARRAY_BUFFER, QUAD_VERTICES, gl.STATIC_DRAW);
-		this.vbo = vbo;
+		const e = this.gl, t = e.createBuffer();
+		e.bindBuffer(e.ARRAY_BUFFER, t), e.bufferData(e.ARRAY_BUFFER, QUAD_VERTICES, e.STATIC_DRAW), 
+		this.vbo = t;
 	}
-
-	_useProgram(program) {
-		const gl = this.gl;
-		gl.useProgram(program);
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
-		const posLoc = gl.getAttribLocation(program, "a_position");
-		const texLoc = gl.getAttribLocation(program, "a_texCoord");
-		gl.enableVertexAttribArray(posLoc);
-		gl.enableVertexAttribArray(texLoc);
-		gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
-		gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
+	_useProgram(e) {
+		const t = this.gl;
+		t.useProgram(e), t.bindBuffer(t.ARRAY_BUFFER, this.vbo);
+		const r = t.getAttribLocation(e, "a_position"), a = t.getAttribLocation(e, "a_texCoord");
+		t.enableVertexAttribArray(r), t.enableVertexAttribArray(a), t.vertexAttribPointer(r, 2, t.FLOAT, !1, 16, 0), 
+		t.vertexAttribPointer(a, 2, t.FLOAT, !1, 16, 8);
 	}
+	_getProgram(e) {
+		if (this.programs[e]) return this.programs[e];
+		const t = this.gl;
+		let r;
+		switch (e) {
+		case "solid":
+		default:
+			r = createProgram(t, VERTEX_SHADER, FRAG_SOLID);
+			break;
 
-	_getProgram(mode) {
-		if (this.programs[mode]) return this.programs[mode];
-		const gl = this.gl;
-		let prog;
-		switch (mode) {
-			case "solid":
-				prog = createProgram(gl, VERTEX_SHADER, FRAG_SOLID);
-				break;
-			case "bayer4":
-			case "bayer8":
-			case "bayer16":
-				prog = createProgram(gl, VERTEX_SHADER, FRAG_BAYER);
-				break;
-			case "blue8":
-			case "blue16":
-			case "blue32":
-				prog = createProgram(gl, VERTEX_SHADER, FRAG_BLUE);
-				break;
-			default:
-				prog = createProgram(gl, VERTEX_SHADER, FRAG_SOLID);
+		case "bayer4":
+		case "bayer8":
+		case "bayer16":
+			r = createProgram(t, VERTEX_SHADER, FRAG_BAYER);
+			break;
+
+		case "blue8":
+		case "blue16":
+		case "blue32":
+			r = createProgram(t, VERTEX_SHADER, FRAG_BLUE);
 		}
-		this.programs[mode] = prog;
-		return prog;
+		return this.programs[e] = r, r;
 	}
-
-	_uploadImageTexture(imageData, w, h) {
-		const gl = this.gl;
-		let tex = this.textures["image"];
-		if (!tex) {
-			tex = gl.createTexture();
-			this.textures["image"] = tex;
-		}
-		// Always bind on TEXTURE0 ourselves — never rely on whatever unit
-		// happened to be active when this is called (see the comment on
-		// _uploadLuminanceTexture below for why that's not safe here).
-		gl.activeTexture(gl.TEXTURE0);
-		gl.bindTexture(gl.TEXTURE_2D, tex);
-		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, imageData);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-		return tex;
+	_uploadImageTexture(e, t, r) {
+		const a = this.gl;
+		let n = this.textures.image;
+		return n || (n = a.createTexture(), this.textures.image = n), a.activeTexture(a.TEXTURE0), 
+		a.bindTexture(a.TEXTURE_2D, n), a.texImage2D(a.TEXTURE_2D, 0, a.RGBA, t, r, 0, a.RGBA, a.UNSIGNED_BYTE, e), 
+		a.texParameteri(a.TEXTURE_2D, a.TEXTURE_MIN_FILTER, a.NEAREST), a.texParameteri(a.TEXTURE_2D, a.TEXTURE_MAG_FILTER, a.NEAREST), 
+		a.texParameteri(a.TEXTURE_2D, a.TEXTURE_WRAP_S, a.CLAMP_TO_EDGE), a.texParameteri(a.TEXTURE_2D, a.TEXTURE_WRAP_T, a.CLAMP_TO_EDGE), 
+		n;
 	}
-
-	// Uploads a single-channel (LUMINANCE) lookup texture, cached per key,
-	// onto the given texture unit (gl.TEXTURE0, gl.TEXTURE1, ...). Used for
-	// both the Blue Noise texture and the Bayer matrix texture — sampling a
-	// texture with a runtime-computed UV has no GLSL ES 1.00 "constant/loop
-	// index only" restriction, unlike a uniform array.
-	//
-	// IMPORTANT: this must set gl.activeTexture(unit) itself, rather than
-	// trusting the caller to have already set the active unit — WebGL's
-	// active-texture-unit is global GL state that persists across calls.
-	// This used to only gl.bindTexture() without activating a unit first,
-	// which silently bound onto whatever unit a *previous, unrelated* call
-	// had left active (in practice: TEXTURE0, right after the real image
-	// texture had just been bound there for u_image) — overwriting the
-	// image texture's binding on unit 0 with the Bayer/noise texture
-	// before the subsequent `gl.activeTexture(gl.TEXTURE1)` call even ran.
-	// The shader's u_image sampler (still pointed at unit 0) ended up
-	// reading the tiny 4x4/8x8 dither texture instead of the actual photo
-	// — producing output with the dither pattern but none of the source
-	// image's content, which is exactly the "checkerboard unrelated to the
-	// source image" bug.
-	_uploadLuminanceTexture(key, texData, size, unit) {
-		const gl = this.gl;
-		let tex = this.textures[key];
-		if (!tex) {
-			tex = gl.createTexture();
-			this.textures[key] = tex;
-		}
-		gl.activeTexture(unit);
-		gl.bindTexture(gl.TEXTURE_2D, tex);
-		gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, size, size, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, texData);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-		return tex;
+	_uploadLuminanceTexture(e, t, r, a) {
+		const n = this.gl;
+		let o = this.textures[e];
+		return o || (o = n.createTexture(), this.textures[e] = o), n.activeTexture(a), n.bindTexture(n.TEXTURE_2D, o), 
+		n.texImage2D(n.TEXTURE_2D, 0, n.LUMINANCE, r, r, 0, n.LUMINANCE, n.UNSIGNED_BYTE, t), 
+		n.texParameteri(n.TEXTURE_2D, n.TEXTURE_MIN_FILTER, n.NEAREST), n.texParameteri(n.TEXTURE_2D, n.TEXTURE_MAG_FILTER, n.NEAREST), 
+		n.texParameteri(n.TEXTURE_2D, n.TEXTURE_WRAP_S, n.REPEAT), n.texParameteri(n.TEXTURE_2D, n.TEXTURE_WRAP_T, n.REPEAT), 
+		o;
 	}
+	_getBayerArray(e) {
+		switch (e) {
+		case "bayer4":
+		default:
+			return {
+				data: BAYER4_U8,
+				size: 4
+			};
 
-	_getBayerArray(mode) {
-		switch (mode) {
-			case "bayer4": return { data: BAYER4_U8, size: 4 };
-			case "bayer8": return { data: BAYER8_U8, size: 8 };
-			case "bayer16": return { data: BAYER16_U8, size: 16 };
-			default: return { data: BAYER4_U8, size: 4 };
+		case "bayer8":
+			return {
+				data: BAYER8_U8,
+				size: 8
+			};
+
+		case "bayer16":
+			return {
+				data: BAYER16_U8,
+				size: 16
+			};
 		}
 	}
+	_getBlueNoiseArray(e) {
+		switch (e) {
+		case "blue8":
+		default:
+			return {
+				data: BLUE8_U8,
+				size: 8
+			};
 
-	_getBlueNoiseArray(mode) {
-		switch (mode) {
-			case "blue8": return { data: BLUE8_U8, size: 8 };
-			case "blue16": return { data: BLUE16_U8, size: 16 };
-			case "blue32": return { data: BLUE32_U8, size: 32 };
-			default: return { data: BLUE8_U8, size: 8 };
+		case "blue16":
+			return {
+				data: BLUE16_U8,
+				size: 16
+			};
+
+		case "blue32":
+			return {
+				data: BLUE32_U8,
+				size: 32
+			};
 		}
 	}
-
-	// ============================================================
-	// MAIN RENDER METHOD
-	// ============================================================
-	async render({ data, w, h, mode, rgbPalette, outImgData, onRow }) {
-		const gl = this.gl;
-
-		// The GL framebuffer's backing store size follows canvas.width/
-		// height, which drives both the viewport and what readPixels can
-		// read back. Resize the internal canvas to match this render's
-		// output dimensions (resizing a canvas implicitly clears/reallocates
-		// its backing store, which is what we want here).
-		if (this.canvas.width !== w || this.canvas.height !== h) {
-			this.canvas.width = w;
-			this.canvas.height = h;
+	async render({data: e, w: t, h: r, mode: a, rgbPalette: n, outImgData: o, onRow: i, hasAlpha: s}) {
+		const c = this.gl;
+		this.canvas.width === t && this.canvas.height === r || (this.canvas.width = t, this.canvas.height = r);
+		const u = this._getProgram(a);
+		if (this._useProgram(u), this._uploadImageTexture(e, t, r), c.uniform1i(c.getUniformLocation(u, "u_image"), 0), 
+		c.uniform2f(c.getUniformLocation(u, "u_resolution"), t, r), a.startsWith("bayer")) {
+			const e = this._getBayerArray(a);
+			this._uploadLuminanceTexture("bayer", e.data, e.size, c.TEXTURE1), c.uniform1i(c.getUniformLocation(u, "u_bayerTex"), 1), 
+			c.uniform1f(c.getUniformLocation(u, "u_bayerSize"), e.size), c.uniform1f(c.getUniformLocation(u, "u_spread"), 72);
+		} else if (a.startsWith("blue")) {
+			const e = this._getBlueNoiseArray(a);
+			this._uploadLuminanceTexture("noise", e.data, e.size, c.TEXTURE1), c.uniform1i(c.getUniformLocation(u, "u_noise"), 1), 
+			c.uniform1f(c.getUniformLocation(u, "u_spread"), 80), c.uniform2f(c.getUniformLocation(u, "u_noiseSize"), e.size, e.size);
 		}
-
-		const program = this._getProgram(mode);
-		this._useProgram(program);
-
-		// Upload image (binds itself onto TEXTURE0)
-		this._uploadImageTexture(data, w, h);
-		gl.uniform1i(gl.getUniformLocation(program, "u_image"), 0);
-
-		gl.uniform2f(gl.getUniformLocation(program, "u_resolution"), w, h);
-
-		// Mode-specific uniforms.
-		//
-		// spread=72/80 matches matrix-engine.js (CPU) exactly. The GPU
-		// shaders only add the ordered-dither offset and hand back a raw
-		// (unquantized) color — palette snapping, including the row-wise
-		// error-carry that keeps the result from looking like the raw
-		// Bayer/Blue-Noise matrix tiled across the image, happens below in
-		// JS after readback (see the loop after gl.readPixels), using the
-		// same algorithm as modeBayer()/modeBlueNoise() in matrix-engine.js.
-		if (mode.startsWith("bayer")) {
-			const bayer = this._getBayerArray(mode);
-			this._uploadLuminanceTexture("bayer", bayer.data, bayer.size, gl.TEXTURE1);
-			gl.uniform1i(gl.getUniformLocation(program, "u_bayerTex"), 1);
-			gl.uniform1f(gl.getUniformLocation(program, "u_bayerSize"), bayer.size);
-			gl.uniform1f(gl.getUniformLocation(program, "u_spread"), 72.0);
-		} else if (mode.startsWith("blue")) {
-			const noise = this._getBlueNoiseArray(mode);
-			this._uploadLuminanceTexture("noise", noise.data, noise.size, gl.TEXTURE1);
-			gl.uniform1i(gl.getUniformLocation(program, "u_noise"), 1);
-			gl.uniform1f(gl.getUniformLocation(program, "u_spread"), 80.0);
-			gl.uniform2f(gl.getUniformLocation(program, "u_noiseSize"), noise.size, noise.size);
-		}
-
-		// Render
-		gl.viewport(0, 0, w, h);
-		gl.clearColor(0, 0, 0, 0);
-		gl.clear(gl.COLOR_BUFFER_BIT);
-		gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-		// Read back
-		const outData = outImgData.data;
-		gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, outData);
-
-		// Build index map and string from output.
-		//
-		// The GPU shaders above only resample the image (plus, for
-		// bayer/blue, add the ordered-dither offset) — they do NOT snap to
-		// the palette. That happens here, in JS, so bayer/blue modes can
-		// use the same row-wise error-carry as modeBayer()/modeBlueNoise()
-		// in matrix-engine.js: 60% of each pixel's leftover quantization
-		// error is carried into the next pixel along the row. That carry
-		// is what keeps the result from looking like the raw Bayer/Blue-
-		// Noise matrix tiled across the image — it's an inherently serial,
-		// row-wise dependency (pixel x needs pixel x-1's residual) that a
-		// parallel fragment shader has no way to express, so it has to
-		// happen after readback rather than inside the shader.
-		const indexMap = new Uint8Array(w * h);
-		const colorCount = rgbPalette.length;
-		const tmpTable = CHAR_TABLE; //colorCount > B32_TABLE.length ? B64_TABLE : (colorCount > HEX_TABLE.length ? B32_TABLE : HEX_TABLE);
-		const useCarry = mode.startsWith("bayer") || mode.startsWith("blue");
-		const carryStrength = 0.6;
-		const clampByte = (v) => v < 0 ? 0 : (v > 255 ? 255 : v);
-
-		let partialStr = onRow ? "" : "img`\n";
-		for (let y = 0; y < h; y++) {
-			let rowStr = "";
-			const rowBase = y * w;
-			let carryR = 0, carryG = 0, carryB = 0;
-			for (let x = 0; x < w; x++) {
-				const px = rowBase + x;
-				const off = px << 2;
-				const a = outData[off + 3];
-				if (a < 128) {
-					indexMap[px] = 0;
-					rowStr += tmpTable[0];
-					outData[off] = 0; outData[off + 1] = 0;
-					outData[off + 2] = 0; outData[off + 3] = 0;
-					carryR = carryG = carryB = 0;
-				} else {
-					const r = useCarry ? clampByte(outData[off] + carryR) : outData[off];
-					const g = useCarry ? clampByte(outData[off + 1] + carryG) : outData[off + 1];
-					const b = useCarry ? clampByte(outData[off + 2] + carryB) : outData[off + 2];
-					let minDist = Infinity, nearest = 1;
-					for (let i = 1; i < colorCount; i++) {
-						const p = rgbPalette[i];
-						const dr = r - p.r, dg = g - p.g, db = b - p.b;
-						const dist = dr * dr + dg * dg + db * db;
-						if (dist < minDist) { minDist = dist; nearest = i; }
+		c.viewport(0, 0, t, r), c.clearColor(0, 0, 0, 0), c.clear(c.COLOR_BUFFER_BIT), c.drawArrays(c.TRIANGLE_STRIP, 0, 4);
+		const l = o.data;
+		c.readPixels(0, 0, t, r, c.RGBA, c.UNSIGNED_BYTE, l);
+		const _ = new Uint8Array(t * r), E = n.length, g = CHAR_TABLE, m = a.startsWith("bayer") || a.startsWith("blue"), T = e => e < 0 ? 0 : e > 255 ? 255 : e;
+		let h = i ? "" : "img`\n";
+		for (let e = 0; e < r; e++) {
+			let r = "";
+			const a = e * t;
+			let o = 0, c = 0, u = 0;
+			for (let e = 0; e < t; e++) {
+				const t = a + e, i = t << 2;
+				if (l[i + 3] < 128) _[t] = 0, r += g[0], l[i] = 0, l[i + 1] = 0, l[i + 2] = 0, l[i + 3] = 0, 
+				o = c = u = 0; else {
+					const e = m ? T(l[i] + o) : l[i], a = m ? T(l[i + 1] + c) : l[i + 1], h = m ? T(l[i + 2] + u) : l[i + 2];
+					let R = 1 / 0, A = 1;
+					for (let t = 1; t < E; t++) {
+						const r = n[t], o = e - r.r, i = a - r.g, s = h - r.b, c = o * o + i * i + s * s;
+						c < R && (R = c, A = t);
 					}
-					indexMap[px] = nearest;
-					rowStr += tmpTable[nearest];
-					const c = rgbPalette[nearest];
-					if (useCarry) {
-						carryR = (r - c.r) * carryStrength;
-						carryG = (g - c.g) * carryStrength;
-						carryB = (b - c.b) * carryStrength;
-					}
-					outData[off] = c.r; outData[off + 1] = c.g;
-					outData[off + 2] = c.b; outData[off + 3] = c.a !== undefined ? c.a : 255;
+					_[t] = A, r += g[A];
+					const d = n[A];
+					m && (o = .6 * (e - d.r), c = .6 * (a - d.g), u = .6 * (h - d.b)), l[i] = d.r, l[i + 1] = d.g, 
+					l[i + 2] = d.b, l[i + 3] = s && void 0 !== d.a ? d.a : 255;
 				}
 			}
-			if (onRow) await onRow(y, rowStr, indexMap); else partialStr += rowStr + "\n";
+			i ? await i(e, r, _) : h += r + "\n";
 		}
-
-		return { hexString: onRow ? "" : partialStr + "`", indexMap };
+		return {
+			hexString: i ? "" : h + "`",
+			indexMap: _
+		};
 	}
 }
 
-/*export*/ async function runGLPipeline({ canvas, data, w, h, mode, rgbPalette, outImgData, onProgress, onRow, hasAlpha }) {
-	const engine = new GLEngine(canvas);
-	// GPU renders all at once — simulate progress
-	onProgress("25.0000");
-	await new Promise(r => requestAnimationFrame(r));
-	onProgress("50.0000");
-	await new Promise(r => requestAnimationFrame(r));
-	// See matrixcl.js runConversionPipeline for why alphaColor is gated on hasAlpha.
-	const activePalette = hasAlpha
-		? rgbPalette
-		: rgbPalette.map((c, i) => (i === 0 ? c : { r: c.r, g: c.g, b: c.b, a: 255 }));
-	const result = await engine.render({ data, w, h, mode, rgbPalette: activePalette, outImgData, onRow });
-	onProgress("100.0000");
-	return result;
+let sharedGLEngine = null;
+
+async function runGLPipeline({canvas: e, data: t, w: r, h: a, mode: n, rgbPalette: o, outImgData: i, onProgress: s, onRow: c, hasAlpha: u}) {
+	const l = sharedGLEngine || (sharedGLEngine = new GLEngine(e));
+	s("25.0000"), await new Promise(e => requestAnimationFrame(e)), s("50.0000"), await new Promise(e => requestAnimationFrame(e));
+	const _ = await l.render({
+		data: t,
+		w: r,
+		h: a,
+		mode: n,
+		rgbPalette: o,
+		outImgData: i,
+		onRow: c,
+		hasAlpha: u
+	});
+	return s("100.0000"), _;
 }

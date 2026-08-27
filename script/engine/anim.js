@@ -1,742 +1,562 @@
-// animproc.js — MIME detection and animation frame decoding.
-// Safe HTML guidance: https://developer.mozilla.org/en-US/docs/Web/API/Element/setHTML
-
 const ANIM_MIME_TYPES = Object.freeze({
-	'image/gif': 'gif',
-	'image/apng': 'apng',
-	'video/webm': 'webm',
-	'image/jxl': 'jxl',
-});
+	"image/gif": "gif",
+	"image/apng": "apng",
+	"video/webm": "webm",
+	"image/jxl": "jxl"
+}), clampDelay = e => Math.max(10, Number.isFinite(e) ? e : 100), readU32 = (e, t) => (e[t] << 24 | e[t + 1] << 16 | e[t + 2] << 8 | e[t + 3]) >>> 0, readU16 = (e, t) => e[t] | e[t + 1] << 8, ascii = (e, t, r) => String.fromCharCode(...e.slice(t, t + r));
 
-const clampDelay = (value) => Math.max(10, Number.isFinite(value) ? value : 100);
-const readU32 = (bytes, offset) => (
-	((bytes[offset] << 24) | (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3]) >>> 0
-);
-const readU16 = (bytes, offset) => bytes[offset] | (bytes[offset + 1] << 8);
-const ascii = (bytes, offset, length) => String.fromCharCode(...bytes.slice(offset, offset + length));
-
-function isAnimatedFormat(mimeType) {
-	return Object.prototype.hasOwnProperty.call(ANIM_MIME_TYPES, String(mimeType).toLowerCase());
+function isAnimatedFormat(e) {
+	return Object.prototype.hasOwnProperty.call(ANIM_MIME_TYPES, String(e).toLowerCase());
 }
 
-function readGifRepeat(bytes) {
-	if (bytes.length < 13) return null;
-	let pos = 13;
-	const packed = bytes[10];
-	if (packed & 0x80) pos += 3 * (1 << ((packed & 0x07) + 1));
-	while (pos < bytes.length) {
-		const marker = bytes[pos++];
-		if (marker === 0x3b || marker === 0x2c) break;
-		if (marker !== 0x21 || pos >= bytes.length) return null;
-		const type = bytes[pos++];
-		const data = [];
-		if (type === 0xff) {
-			if (pos >= bytes.length) return null;
-			const blockSize = bytes[pos++];
-			if (pos + blockSize > bytes.length) return null;
-			const application = ascii(bytes, pos, blockSize);
-			pos += blockSize;
-			while (pos < bytes.length) {
-				const length = bytes[pos++];
-				if (!length) break;
-				if (pos + length > bytes.length) return null;
-				data.push(...bytes.slice(pos, pos + length));
-				pos += length;
+function readGifRepeat(e) {
+	if (e.length < 13) return null;
+	let t = 13;
+	const r = e[10];
+	for (128 & r && (t += 3 * (1 << 1 + (7 & r))); t < e.length; ) {
+		const r = e[t++];
+		if (59 === r || 44 === r) break;
+		if (33 !== r || t >= e.length) return null;
+		const i = [];
+		if (255 === e[t++]) {
+			if (t >= e.length) return null;
+			const r = e[t++];
+			if (t + r > e.length) return null;
+			const n = ascii(e, t, r);
+			for (t += r; t < e.length; ) {
+				const r = e[t++];
+				if (!r) break;
+				if (t + r > e.length) return null;
+				i.push(...e.slice(t, t + r)), t += r;
 			}
-			if ((application.startsWith('NETSCAPE') || application.startsWith('ANIMEXTS')) && data[0] === 1 && data.length >= 3) return data[1] | (data[2] << 8);
-		} else {
-			while (pos < bytes.length) {
-				const length = bytes[pos++];
-				if (!length) break;
-				pos += length;
-			}
+			if ((n.startsWith("NETSCAPE") || n.startsWith("ANIMEXTS")) && 1 === i[0] && i.length >= 3) return i[1] | i[2] << 8;
+		} else for (;t < e.length; ) {
+			const r = e[t++];
+			if (!r) break;
+			t += r;
 		}
 	}
 	return null;
 }
 
-function countGifImageDescriptors(bytes) {
-	if (bytes.length < 13) return 0;
-	let pos = 13;
-	const packed = bytes[10];
-	if (packed & 0x80) pos += 3 * (1 << ((packed & 0x07) + 1));
-	let count = 0;
-	const skipSubBlocks = () => {
-		while (pos < bytes.length) {
-			const length = bytes[pos++];
-			if (!length) return;
-			pos += length;
+function countGifImageDescriptors(e) {
+	if (e.length < 13) return 0;
+	let t = 13;
+	const r = e[10];
+	128 & r && (t += 3 * (1 << 1 + (7 & r)));
+	let i = 0;
+	const n = () => {
+		for (;t < e.length; ) {
+			const r = e[t++];
+			if (!r) return;
+			t += r;
 		}
 	};
-	while (pos < bytes.length) {
-		const marker = bytes[pos++];
-		if (marker === 0x3b) break;
-		if (marker === 0x2c) {
-			if (pos + 9 > bytes.length) break;
-			const framePacked = bytes[pos + 8];
-			pos += 9;
-			if (framePacked & 0x80) pos += 3 * (1 << ((framePacked & 0x07) + 1));
-			if (pos >= bytes.length) break;
-			pos += 1;
-			skipSubBlocks();
-			count += 1;
+	for (;t < e.length; ) {
+		const r = e[t++];
+		if (59 === r) break;
+		if (44 === r) {
+			if (t + 9 > e.length) break;
+			const r = e[t + 8];
+			if (t += 9, 128 & r && (t += 3 * (1 << 1 + (7 & r))), t >= e.length) break;
+			t += 1, n(), i += 1;
 			continue;
 		}
-		if (marker === 0x21) {
-			if (pos >= bytes.length) break;
-			pos += 1;
-			skipSubBlocks();
-			continue;
+		if (33 !== r) break;
+		if (t >= e.length) break;
+		t += 1, n();
+	}
+	return i;
+}
+
+function isAnimatedBuffer(e, t) {
+	const r = new Uint8Array(e), i = String(t || "").toLowerCase();
+	if ("image/gif" === i) return countGifImageDescriptors(r) > 1;
+	if ("image/apng" === i || "image/png" === i) {
+		for (let e = 8; e + 12 <= r.length; ) {
+			const t = readU32(r, e);
+			if ("acTL" === ascii(r, e + 4, 4)) return !0;
+			e += t + 12;
 		}
-		break;
+		return !1;
 	}
-	return count;
-}
-
-function isAnimatedBuffer(buffer, mimeType) {
-	const bytes = new Uint8Array(buffer);
-	const mime = String(mimeType || '').toLowerCase();
-	if (mime === 'image/gif') return countGifImageDescriptors(bytes) > 1;
-	if (mime === 'image/apng' || mime === 'image/png') {
-		for (let pos = 8; pos + 12 <= bytes.length;) {
-			const length = readU32(bytes, pos);
-			const type = ascii(bytes, pos + 4, 4);
-			if (type === 'acTL') return true;
-			pos += length + 12;
-		}
-		return false;
+	if ("image/webp" === i && "RIFF" === ascii(r, 0, 4) && "WEBP" === ascii(r, 8, 4)) {
+		const e = ascii(r, 12, 4);
+		return "ANIM" === e || "ANMF" === e || "VP8X" === e && Boolean(2 & r[20]);
 	}
-	if (mime === 'image/webp' && ascii(bytes, 0, 4) === 'RIFF' && ascii(bytes, 8, 4) === 'WEBP') {
-		const chunk = ascii(bytes, 12, 4);
-		return chunk === 'ANIM' || chunk === 'ANMF' || (chunk === 'VP8X' && Boolean(bytes[20] & 0x02));
-	}
-	return mime === 'video/webm' || mime === 'image/jxl';
+	return "video/webm" === i || "image/jxl" === i;
 }
 
-function cloneCanvas(source) {
-	const canvas = document.createElement('canvas');
-	canvas.width = source.width;
-	canvas.height = source.height;
-	canvas.getContext('2d').drawImage(source, 0, 0);
-	return canvas;
+function cloneCanvas(e) {
+	const t = document.createElement("canvas");
+	return t.width = e.width, t.height = e.height, t.getContext("2d").drawImage(e, 0, 0), 
+	t;
 }
 
-function imageDataToCanvas(data, width, height) {
-	const canvas = document.createElement('canvas');
-	canvas.width = width;
-	canvas.height = height;
-	canvas.getContext('2d').putImageData(data, 0, 0);
-	return canvas;
+function imageDataToCanvas(e, t, r) {
+	const i = document.createElement("canvas");
+	return i.width = t, i.height = r, i.getContext("2d").putImageData(e, 0, 0), i;
 }
 
-async function openImageDecoderStream(buffer, mimeType) {
-	if (!('ImageDecoder' in window)) return null;
-	const type = mimeType === 'image/apng' ? 'image/png' : mimeType;
-	let decoder;
+async function openImageDecoderStream(e, t) {
+	if (!("ImageDecoder" in window)) return null;
+	const r = "image/apng" === t ? "image/png" : t;
+	let i;
 	try {
-		decoder = new ImageDecoder({ data: buffer, type });
-		await decoder.tracks.ready;
-		const track = decoder.tracks.selectedTrack;
-		const count = Math.max(0, track?.frameCount || 0);
-		const repeat = Number.isFinite(track?.repetitionCount) ? track.repetitionCount : null;
-		const stream = (async function* () {
+		i = new ImageDecoder({
+			data: e,
+			type: r
+		}), await i.tracks.ready;
+		const t = i.tracks.selectedTrack, n = Math.max(0, t?.frameCount || 0), a = Number.isFinite(t?.repetitionCount) ? t.repetitionCount : null, s = async function*() {
 			try {
-				for (let index = 0; index < count; index += 1) {
-					const result = await decoder.decode({ frameIndex: index });
-					const image = result.image;
-					const width = image.displayWidth || image.codedWidth;
-					const height = image.displayHeight || image.codedHeight;
-					const canvas = document.createElement('canvas');
-					canvas.width = width;
-					canvas.height = height;
-					canvas.getContext('2d').drawImage(image, 0, 0, width, height);
-					yield {
-						image: canvas,
-						delay: clampDelay((image.duration || 100000) / 1000),
-						width,
-						height,
-						rect: { x: 0, y: 0, width, height },
-						changedOnly: false,
-						composited: true,
-						compositionMode: 'replace',
-					};
-					image.close?.();
+				for (let e = 0; e < n; e += 1) {
+					const t = (await i.decode({
+						frameIndex: e
+					})).image, r = t.displayWidth || t.codedWidth, n = t.displayHeight || t.codedHeight, a = document.createElement("canvas");
+					a.width = r, a.height = n, a.getContext("2d").drawImage(t, 0, 0, r, n), yield {
+						image: a,
+						delay: clampDelay((t.duration || 1e5) / 1e3),
+						width: r,
+						height: n,
+						rect: {
+							x: 0,
+							y: 0,
+							width: r,
+							height: n
+						},
+						changedOnly: !1,
+						composited: !0,
+						compositionMode: "replace"
+					}, t.close?.();
 				}
 			} finally {
-				decoder.close?.();
+				i.close?.();
 			}
-		})();
-		stream.repeat = repeat;
-		stream.frameCount = count;
-		return stream;
-	} catch (error) {
-		decoder?.close?.();
-		return null;
+		}();
+		return s.repeat = a, s.frameCount = n, s;
+	} catch (e) {
+		return i?.close?.(), null;
 	}
 }
 
 class GIFDecoder {
-	constructor(buffer) {
-		this.bytes = new Uint8Array(buffer);
-		this.pos = 0;
-		this.frames = [];
-		this.screen = null;
-		this.width = 0;
-		this.height = 0;
-		this.globalTable = [];
-		this.backgroundIndex = 0;
-		this.delay = 100;
-		this.transparentIndex = -1;
-		this.disposal = 0;
-		this.repeat = null;
+	constructor(e) {
+		this.bytes = new Uint8Array(e), this.pos = 0, this.screen = null, this.width = 0, 
+		this.height = 0, this.globalTable = [], this.backgroundIndex = 0, this.delay = 100, 
+		this.transparentIndex = -1, this.disposal = 0, this.repeat = null;
 	}
-
 	readByte() {
-		if (this.pos >= this.bytes.length) throw new Error('Unexpected end of GIF data.');
+		if (this.pos >= this.bytes.length) throw new Error("Unexpected end of GIF data.");
 		return this.bytes[this.pos++];
 	}
-
 	readWord() {
-		return this.readByte() | (this.readByte() << 8);
+		return this.readByte() | this.readByte() << 8;
 	}
-
-	readBytes(length) {
-		const end = this.pos + length;
-		if (end > this.bytes.length) throw new Error('Invalid GIF block length.');
-		const value = this.bytes.slice(this.pos, end);
-		this.pos = end;
-		return value;
+	readBytes(e) {
+		const t = this.pos + e;
+		if (t > this.bytes.length) throw new Error("Invalid GIF block length.");
+		const r = this.bytes.subarray(this.pos, t);
+		return this.pos = t, r;
 	}
-
-	readColorTable(size) {
-		const table = [];
-		for (let index = 0; index < size; index += 1) {
-			table.push([this.readByte(), this.readByte(), this.readByte()]);
-		}
-		return table;
+	readColorTable(e) {
+		const t = new Uint8Array(3 * e);
+		for (let e = 0; e < t.length; e += 1) t[e] = this.readByte();
+		return t;
 	}
-
-	clearRect(imageData, x, y, width, height) {
-		const left = Math.max(0, x);
-		const top = Math.max(0, y);
-		const right = Math.min(this.width, x + width);
-		const bottom = Math.min(this.height, y + height);
-		for (let row = top; row < bottom; row += 1) {
-			const start = (row * this.width + left) * 4;
-			imageData.data.fill(0, start, start + (right - left) * 4);
+	clearRect(e, t, r, i, n) {
+		const a = Math.max(0, t), s = Math.max(0, r), o = Math.min(this.width, t + i), h = Math.min(this.height, r + n);
+		for (let t = s; t < h; t += 1) {
+			const r = 4 * (t * this.width + a);
+			e.data.fill(0, r, r + 4 * (o - a));
 		}
 	}
-
-	decode() {
-		const signature = ascii(this.readBytes(6), 0, 6);
-		if (signature !== 'GIF87a' && signature !== 'GIF89a') throw new Error('Invalid GIF signature.');
-		this.width = this.readWord();
-		this.height = this.readWord();
-		const packed = this.readByte();
-		const hasGlobalTable = Boolean(packed & 0x80);
-		const globalSize = 2 ** ((packed & 0x07) + 1);
-		this.backgroundIndex = this.readByte();
-		this.readByte();
-		this.globalTable = hasGlobalTable ? this.readColorTable(globalSize) : [];
-		this.screen = new ImageData(this.width, this.height);
-
-		while (this.pos < this.bytes.length) {
-			const marker = this.readByte();
-			if (marker === 0x3b) break;
-			if (marker === 0x21) {
-				this.readExtension();
-				continue;
-			}
-			if (marker !== 0x2c) throw new Error('Unknown GIF block marker.');
-			const frame = this.readFrame();
-			if (frame) this.frames.push(frame);
-		}
-		if (!this.frames.length) throw new Error('GIF contains no image frames.');
-		this.frames.repeat = this.repeat;
-		return this.frames;
-	}
-
 	readExtension() {
-		const type = this.readByte();
-		if (type === 0xf9) {
-			const blockSize = this.readByte();
-			if (blockSize !== 4) throw new Error('Invalid GIF graphic control extension.');
-			const packed = this.readByte();
-			this.disposal = (packed >> 2) & 0x07;
-			this.delay = Math.max(10, this.readWord() * 10);
-			const transparentIndex = this.readByte();
-			this.transparentIndex = packed & 1 ? transparentIndex : -1;
-			this.readByte();
-			return;
+		const e = this.readByte();
+		if (249 === e) {
+			if (4 !== this.readByte()) throw new Error("Invalid GIF graphic control extension.");
+			const e = this.readByte();
+			this.disposal = e >> 2 & 7, this.delay = Math.max(10, 10 * this.readWord());
+			const t = this.readByte();
+			return this.transparentIndex = 1 & e ? t : -1, void this.readByte();
 		}
-		if (type === 0xff) {
-			const blockSize = this.readByte();
-			const application = ascii(this.readBytes(blockSize), 0, blockSize);
-			const data = [];
-			let length;
-			while ((length = this.readByte()) !== 0) data.push(...this.readBytes(length));
-			if ((application.startsWith('NETSCAPE') || application.startsWith('ANIMEXTS')) && data[0] === 1 && data.length >= 3) this.repeat = data[1] | (data[2] << 8);
-			return;
+		if (255 === e) {
+			const e = this.readByte(), t = ascii(this.readBytes(e), 0, e), r = [];
+			let i;
+			for (;0 !== (i = this.readByte()); ) r.push(...this.readBytes(i));
+			return void ((t.startsWith("NETSCAPE") || t.startsWith("ANIMEXTS")) && 1 === r[0] && r.length >= 3 && (this.repeat = r[1] | r[2] << 8));
 		}
-		let length;
-		while ((length = this.readByte()) !== 0) this.readBytes(length);
+		let t;
+		for (;0 !== (t = this.readByte()); ) this.readBytes(t);
 	}
-
 	readFrame() {
-		const x = this.readWord();
-		const y = this.readWord();
-		const width = this.readWord();
-		const height = this.readWord();
-		const packed = this.readByte();
-		const hasLocalTable = Boolean(packed & 0x80);
-		const interlaced = Boolean(packed & 0x40);
-		const tableSize = 2 ** ((packed & 0x07) + 1);
-		const table = hasLocalTable ? this.readColorTable(tableSize) : this.globalTable;
-		const indices = this.readLZWData(this.readByte(), width * height);
-		const before = this.disposal === 3 ? new Uint8ClampedArray(this.screen.data) : null;
-		const rows = [];
-		if (interlaced) {
-			for (const [start, step] of [[0, 8], [4, 8], [2, 4], [1, 2]]) {
-				for (let row = start; row < height; row += step) rows.push(row);
-			}
-		} else {
-			for (let row = 0; row < height; row += 1) rows.push(row);
-		}
-		let source = 0;
-		for (const row of rows) {
-			for (let col = 0; col < width; col += 1) {
-				const colorIndex = indices[source++];
-				if (colorIndex === this.transparentIndex) continue;
-				const color = table[colorIndex];
-				if (!color) continue;
-				const px = x + col;
-				const py = y + row;
-				if (px < 0 || py < 0 || px >= this.width || py >= this.height) continue;
-				const offset = (py * this.width + px) * 4;
-				this.screen.data[offset] = color[0];
-				this.screen.data[offset + 1] = color[1];
-				this.screen.data[offset + 2] = color[2];
-				this.screen.data[offset + 3] = 255;
+		const e = this.readWord(), t = this.readWord(), r = this.readWord(), i = this.readWord(), n = this.readByte(), a = Boolean(128 & n), s = Boolean(64 & n), o = 2 ** (1 + (7 & n)), h = a ? this.readColorTable(o) : this.globalTable, c = this.readLZWData(this.readByte(), r * i), d = 3 === this.disposal ? new Uint8ClampedArray(this.screen.data) : null;
+		let l = 0;
+		const f = s ? 4 : 1;
+		for (let n = 0; n < f; n += 1) {
+			const a = s ? n < 2 ? 8 : 2 === n ? 4 : 2 : 1;
+			for (let o = s ? 1 === n ? 4 : 2 === n ? 2 : 3 === n ? 1 : 0 : 0; o < i; o += a) for (let i = 0; i < r; i += 1) {
+				const r = c[l++];
+				if (r === this.transparentIndex) continue;
+				const n = 3 * r;
+				if (n + 2 >= h.length) continue;
+				const a = e + i, s = t + o;
+				if (a < 0 || s < 0 || a >= this.width || s >= this.height) continue;
+				const d = 4 * (s * this.width + a);
+				this.screen.data[d] = h[n], this.screen.data[d + 1] = h[n + 1], this.screen.data[d + 2] = h[n + 2], 
+				this.screen.data[d + 3] = 255;
 			}
 		}
-		const image = imageDataToCanvas(this.screen, this.width, this.height);
-		const changedOnly = x !== 0 || y !== 0 || width !== this.width || height !== this.height;
-		const frame = {
-			image,
+		const u = imageDataToCanvas(this.screen, this.width, this.height), g = 0 !== e || 0 !== t || r !== this.width || i !== this.height, p = {
+			image: u,
 			delay: clampDelay(this.delay),
 			width: this.width,
 			height: this.height,
-			rect: { x, y, width, height },
-			changedOnly,
-			composited: true,
-			compositionMode: changedOnly ? 'latest' : 'replace',
-			disposal: this.disposal,
+			rect: {
+				x: e,
+				y: t,
+				width: r,
+				height: i
+			},
+			changedOnly: g,
+			composited: !0,
+			compositionMode: g ? "latest" : "replace",
+			disposal: this.disposal
 		};
-		if (this.disposal === 2) this.clearRect(this.screen, x, y, width, height);
-		if (this.disposal === 3 && before) this.screen.data.set(before);
-		this.delay = 100;
-		this.transparentIndex = -1;
-		this.disposal = 0;
-		return frame;
+		return 2 === this.disposal && this.clearRect(this.screen, e, t, r, i), 3 === this.disposal && d && this.screen.data.set(d), 
+		this.delay = 100, this.transparentIndex = -1, this.disposal = 0, p;
 	}
-
-	async *stream() {
+	async* stream() {
 		this.pos = 0;
-		this.frames = [];
-		const signature = ascii(this.readBytes(6), 0, 6);
-		if (signature !== 'GIF87a' && signature !== 'GIF89a') throw new Error('Invalid GIF signature.');
-		this.width = this.readWord();
-		this.height = this.readWord();
-		const packed = this.readByte();
-		const hasGlobalTable = Boolean(packed & 0x80);
-		const globalSize = 2 ** ((packed & 0x07) + 1);
-		this.backgroundIndex = this.readByte();
-		this.readByte();
-		this.globalTable = hasGlobalTable ? this.readColorTable(globalSize) : [];
-		this.screen = new ImageData(this.width, this.height);
-		while (this.pos < this.bytes.length) {
-			const marker = this.readByte();
-			if (marker === 0x3b) break;
-			if (marker === 0x21) {
-				this.readExtension();
-				continue;
-			}
-			if (marker !== 0x2c) throw new Error('Unknown GIF block marker.');
-			yield this.readFrame();
+		const e = ascii(this.readBytes(6), 0, 6);
+		if ("GIF87a" !== e && "GIF89a" !== e) throw new Error("Invalid GIF signature.");
+		this.width = this.readWord(), this.height = this.readWord();
+		const t = this.readByte(), r = Boolean(128 & t), i = 2 ** (1 + (7 & t));
+		for (this.backgroundIndex = this.readByte(), this.readByte(), this.globalTable = r ? this.readColorTable(i) : [], 
+		this.screen = new ImageData(this.width, this.height); this.pos < this.bytes.length; ) {
+			const e = this.readByte();
+			if (59 === e) break;
+			if (33 !== e) {
+				if (44 !== e) throw new Error("Unknown GIF block marker.");
+				yield this.readFrame();
+			} else this.readExtension();
 		}
-		if (!this.width || !this.height) throw new Error('GIF contains no image frames.');
+		if (!this.width || !this.height) throw new Error("GIF contains no image frames.");
 	}
-
-	readLZWData(minCodeSize, expectedLength) {
-		const compressed = [];
-		let blockLength;
-		while ((blockLength = this.readByte()) !== 0) compressed.push(...this.readBytes(blockLength));
-		const clear = 1 << minCodeSize;
-		const end = clear + 1;
-		let codeSize = minCodeSize + 1;
-		let dictionary;
-		let nextCode;
-		let bitBuffer = 0;
-		let bitCount = 0;
-		let offset = 0;
-		const output = [];
-		const reset = () => {
-			dictionary = Array.from({ length: clear }, (_, index) => [index]);
-			dictionary.push(null, null);
-			nextCode = end + 1;
-			codeSize = minCodeSize + 1;
+	readLZWData(e, t) {
+		const r = [];
+		let i, n = 0;
+		for (;0 !== (i = this.readByte()); ) {
+			const e = this.readBytes(i);
+			r.push(e), n += e.length;
+		}
+		const a = new Uint8Array(n);
+		let s = 0;
+		for (const e of r) a.set(e, s), s += e.length;
+		const o = 1 << e, h = o + 1;
+		let c, d, l = e + 1, f = 0, u = 0, g = 0;
+		const p = new Uint8Array(t);
+		let m = 0;
+		const y = () => {
+			c = new Array(o);
+			for (let e = 0; e < o; e += 1) c[e] = [ e ];
+			c.push(null, null), d = h + 1, l = e + 1;
+		}, w = () => {
+			for (;u < l && g < a.length; ) f |= a[g++] << u, u += 8;
+			if (u < l) return -1;
+			const e = f & (1 << l) - 1;
+			return f >>= l, u -= l, e;
 		};
-		const readCode = () => {
-			while (bitCount < codeSize && offset < compressed.length) {
-				bitBuffer |= compressed[offset++] << bitCount;
-				bitCount += 8;
-			}
-			if (bitCount < codeSize) return -1;
-			const code = bitBuffer & ((1 << codeSize) - 1);
-			bitBuffer >>= codeSize;
-			bitCount -= codeSize;
-			return code;
-		};
-		reset();
-		let previous = null;
-		while (output.length < expectedLength) {
-			const code = readCode();
-			if (code < 0 || code === end) break;
-			if (code === clear) {
-				reset();
-				previous = null;
+		y();
+		let b = null;
+		for (;m < t; ) {
+			const e = w();
+			if (e < 0 || e === h) break;
+			if (e === o) {
+				y(), b = null;
 				continue;
 			}
-			let entry;
-			if (code < dictionary.length && dictionary[code]) entry = dictionary[code];
-			else if (code === nextCode && previous) entry = [...previous, previous[0]];
-			else throw new Error('Invalid GIF LZW code.');
-			output.push(...entry);
-			if (previous && nextCode < 4096) {
-				dictionary[nextCode++] = [...previous, entry[0]];
-				if (nextCode === (1 << codeSize) && codeSize < 12) codeSize += 1;
+			let r;
+			if (e < c.length && c[e]) r = c[e]; else {
+				if (e !== d || !b) throw new Error("Invalid GIF LZW code.");
+				r = [ ...b, b[0] ];
 			}
-			previous = entry;
+			for (const e of r) {
+				if (m >= t) break;
+				p[m++] = e;
+			}
+			b && d < 4096 && (c[d++] = [ ...b, r[0] ], d === 1 << l && l < 12 && (l += 1)), 
+			b = r;
 		}
-		return output.slice(0, expectedLength);
+		return m === t ? p : p.subarray(0, m);
 	}
 }
 
 class PNGDecoder {
-	constructor(buffer) {
-		this.bytes = new Uint8Array(buffer);
-		this.width = 0;
-		this.height = 0;
-		this.bitDepth = 0;
-		this.colorType = 0;
-		this.palette = [];
-		this.transparency = [];
-		this.playCount = 0;
+	constructor(e) {
+		this.bytes = new Uint8Array(e), this.width = 0, this.height = 0, this.bitDepth = 0, 
+		this.colorType = 0, this.palette = [], this.transparency = [], this.playCount = 0, 
 		this.frames = [];
 	}
-
-	async inflate(chunks) {
-		if (!('DecompressionStream' in window)) throw new Error('APNG decoding needs browser DecompressionStream support.');
-		const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-		const joined = new Uint8Array(total);
-		let offset = 0;
-		for (const chunk of chunks) {
-			joined.set(chunk, offset);
-			offset += chunk.length;
-		}
-		const stream = new Blob([joined]).stream().pipeThrough(new DecompressionStream('deflate'));
-		return new Uint8Array(await new Response(stream).arrayBuffer());
+	async inflate(e) {
+		if (!("DecompressionStream" in window)) throw new Error("APNG decoding needs browser DecompressionStream support.");
+		const t = e.reduce((e, t) => e + t.length, 0), r = new Uint8Array(t);
+		let i = 0;
+		for (const t of e) r.set(t, i), i += t.length;
+		const n = new Blob([ r ]).stream().pipeThrough(new DecompressionStream("deflate"));
+		return new Uint8Array(await new Response(n).arrayBuffer());
 	}
-
 	parseChunks() {
-		const signature = [137, 80, 78, 71, 13, 10, 26, 10];
-		if (!signature.every((value, index) => this.bytes[index] === value)) throw new Error('Invalid PNG signature.');
-		const defaultChunks = [];
-		const frames = [];
-		let current = null;
-		for (let pos = 8; pos + 12 <= this.bytes.length;) {
-			const length = readU32(this.bytes, pos);
-			const type = ascii(this.bytes, pos + 4, 4);
-			const data = this.bytes.subarray(pos + 8, pos + 8 + length);
-			pos += length + 12;
-			if (type === 'IHDR') {
-				this.width = readU32(data, 0);
-				this.height = readU32(data, 4);
-				this.bitDepth = data[8];
-				this.colorType = data[9];
-			} else if (type === 'acTL') {
-				this.playCount = readU32(data, 4);
-			} else if (type === 'PLTE') {
-				for (let index = 0; index < data.length; index += 3) this.palette.push([data[index], data[index + 1], data[index + 2]]);
-			} else if (type === 'tRNS') {
-				this.transparency = [...data];
-			} else if (type === 'fcTL') {
-				if (current) frames.push(current);
-				current = {
-					control: {
-						width: readU32(data, 4),
-						height: readU32(data, 8),
-						x: readU32(data, 12),
-						y: readU32(data, 16),
-						delayNum: (data[20] << 8) | data[21],
-						delayDen: ((data[22] << 8) | data[23]) || 100,
-						dispose: data[24],
-						blend: data[25],
-					},
-					chunks: [],
-				};
-			} else if (type === 'IDAT') {
-				(current ? current.chunks : defaultChunks).push(data);
-			} else if (type === 'fdAT' && current) {
-				current.chunks.push(data.slice(4));
-			} else if (type === 'IEND') {
-				break;
-			}
+		if (![ 137, 80, 78, 71, 13, 10, 26, 10 ].every((e, t) => this.bytes[t] === e)) throw new Error("Invalid PNG signature.");
+		const e = [], t = [];
+		let r = null;
+		for (let i = 8; i + 12 <= this.bytes.length; ) {
+			const n = readU32(this.bytes, i), a = ascii(this.bytes, i + 4, 4), s = this.bytes.subarray(i + 8, i + 8 + n);
+			if (i += n + 12, "IHDR" === a) this.width = readU32(s, 0), this.height = readU32(s, 4), 
+			this.bitDepth = s[8], this.colorType = s[9]; else if ("acTL" === a) this.playCount = readU32(s, 4); else if ("PLTE" === a) this.palette = s; else if ("tRNS" === a) this.transparency = s; else if ("fcTL" === a) r && t.push(r), 
+			r = {
+				control: {
+					width: readU32(s, 4),
+					height: readU32(s, 8),
+					x: readU32(s, 12),
+					y: readU32(s, 16),
+					delayNum: s[20] << 8 | s[21],
+					delayDen: s[22] << 8 | s[23] || 100,
+					dispose: s[24],
+					blend: s[25]
+				},
+				chunks: []
+			}; else if ("IDAT" === a) (r ? r.chunks : e).push(s); else if ("fdAT" === a && r) r.chunks.push(s.subarray(4)); else if ("IEND" === a) break;
 		}
-		if (current) frames.push(current);
-		if (defaultChunks.length && frames.length && !frames[0].chunks.length) frames[0].chunks = defaultChunks;
-		return { frames, defaultChunks };
+		return r && t.push(r), e.length && t.length && !t[0].chunks.length && (t[0].chunks = e), 
+		{
+			frames: t,
+			defaultChunks: e
+		};
 	}
-
-	unfilter(raw, width, height, bytesPerPixel) {
-		const stride = width * bytesPerPixel;
-		const result = new Uint8Array(stride * height);
-		let source = 0;
-		for (let y = 0; y < height; y += 1) {
-			const filter = raw[source++];
-			const rowStart = y * stride;
-			for (let x = 0; x < stride; x += 1) {
-				const value = raw[source++];
-				const left = x >= bytesPerPixel ? result[rowStart + x - bytesPerPixel] : 0;
-				const above = y ? result[rowStart - stride + x] : 0;
-				const upperLeft = y && x >= bytesPerPixel ? result[rowStart - stride + x - bytesPerPixel] : 0;
-				let decoded = value;
-				if (filter === 1) decoded = value + left;
-				else if (filter === 2) decoded = value + above;
-				else if (filter === 3) decoded = value + Math.floor((left + above) / 2);
-				else if (filter === 4) {
-					const estimate = left + above - upperLeft;
-					const pa = Math.abs(estimate - left);
-					const pb = Math.abs(estimate - above);
-					const pc = Math.abs(estimate - upperLeft);
-					decoded = value + (pa <= pb && pa <= pc ? left : pb <= pc ? above : upperLeft);
+	unfilter(e, t, r, i) {
+		const n = t * i, a = new Uint8Array(n * r);
+		let s = 0;
+		for (let t = 0; t < r; t += 1) {
+			const r = e[s++], o = t * n;
+			for (let h = 0; h < n; h += 1) {
+				const c = e[s++], d = h >= i ? a[o + h - i] : 0, l = t ? a[o - n + h] : 0, f = t && h >= i ? a[o - n + h - i] : 0;
+				let u = c;
+				if (1 === r) u = c + d; else if (2 === r) u = c + l; else if (3 === r) u = c + Math.floor((d + l) / 2); else if (4 === r) {
+					const e = d + l - f, t = Math.abs(e - d), r = Math.abs(e - l), i = Math.abs(e - f);
+					u = c + (t <= r && t <= i ? d : r <= i ? l : f);
 				}
-				result[rowStart + x] = decoded & 255;
+				a[o + h] = 255 & u;
 			}
 		}
-		return result;
+		return a;
 	}
-
-	async decodePixels(chunks, width, height) {
-		if (this.bitDepth !== 8) throw new Error('Only 8-bit PNG/APNG frames are supported.');
-		const bytesPerPixel = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }[this.colorType];
-		if (!bytesPerPixel) throw new Error(`Unsupported PNG color type: ${this.colorType}.`);
-		const raw = this.unfilter(await this.inflate(chunks), width, height, bytesPerPixel);
-		const data = new Uint8ClampedArray(width * height * 4);
-		for (let y = 0; y < height; y += 1) {
-			for (let x = 0; x < width; x += 1) {
-				const source = (y * width + x) * bytesPerPixel;
-				const target = (y * width + x) * 4;
-				let r = 0; let g = 0; let b = 0; let a = 255;
-				if (this.colorType === 6) [r, g, b, a] = raw.slice(source, source + 4);
-				else if (this.colorType === 2) [r, g, b] = raw.slice(source, source + 3);
-				else if (this.colorType === 4) [r, a] = raw.slice(source, source + 2), g = r, b = r;
-				else if (this.colorType === 0) r = g = b = raw[source];
-				else if (this.colorType === 3) {
-					const color = this.palette[raw[source]] || [0, 0, 0];
-					[r, g, b] = color;
-					a = this.transparency[raw[source]] ?? 255;
-				}
-				data[target] = r; data[target + 1] = g; data[target + 2] = b; data[target + 3] = a;
+	async decodePixels(e, t, r) {
+		if (8 !== this.bitDepth) throw new Error("Only 8-bit PNG/APNG frames are supported.");
+		const i = {
+			0: 1,
+			2: 3,
+			3: 1,
+			4: 2,
+			6: 4
+		}[this.colorType];
+		if (!i) throw new Error(`Unsupported PNG color type: ${this.colorType}.`);
+		const n = this.unfilter(await this.inflate(e), t, r, i), a = new Uint8ClampedArray(t * r * 4);
+		for (let e = 0; e < r; e += 1) for (let r = 0; r < t; r += 1) {
+			const s = (e * t + r) * i, o = 4 * (e * t + r);
+			let h = 0, c = 0, d = 0, l = 255;
+			if (6 === this.colorType) h = n[s], c = n[s + 1], d = n[s + 2], l = n[s + 3]; else if (2 === this.colorType) h = n[s], 
+			c = n[s + 1], d = n[s + 2]; else if (4 === this.colorType) h = n[s], c = h, d = h, 
+			l = n[s + 1]; else if (0 === this.colorType) h = c = d = n[s]; else if (3 === this.colorType) {
+				const e = 3 * n[s];
+				h = this.palette[e] ?? 0, c = this.palette[e + 1] ?? 0, d = this.palette[e + 2] ?? 0, 
+				l = this.transparency[n[s]] ?? 255;
 			}
+			a[o] = h, a[o + 1] = c, a[o + 2] = d, a[o + 3] = l;
 		}
-		return new ImageData(data, width, height);
+		return new ImageData(a, t, r);
 	}
-
-	async *stream() {
-		const parsed = this.parseChunks();
-		if (!parsed.frames.length) throw new Error('PNG does not contain APNG frame controls.');
-		const screen = document.createElement('canvas');
-		screen.width = this.width;
-		screen.height = this.height;
-		const screenContext = screen.getContext('2d');
-		for (const frame of parsed.frames) {
-			const control = frame.control;
-			const frameData = await this.decodePixels(frame.chunks, control.width, control.height);
-			const backup = control.dispose === 2 ? screenContext.getImageData(0, 0, this.width, this.height) : null;
-			if (control.blend === 0) screenContext.clearRect(control.x, control.y, control.width, control.height);
-			const patch = imageDataToCanvas(frameData, control.width, control.height);
-			screenContext.drawImage(patch, control.x, control.y);
-			const image = cloneCanvas(screen);
-			patch.width = 0;
-			patch.height = 0;
-			const changedOnly = control.x !== 0 || control.y !== 0 || control.width !== this.width || control.height !== this.height;
+	async* stream() {
+		const e = this.parseChunks();
+		if (!e.frames.length) throw new Error("PNG does not contain APNG frame controls.");
+		const t = document.createElement("canvas");
+		t.width = this.width, t.height = this.height;
+		const r = t.getContext("2d");
+		for (const i of e.frames) {
+			const e = i.control, n = await this.decodePixels(i.chunks, e.width, e.height), a = 2 === e.dispose ? r.getImageData(0, 0, this.width, this.height) : null;
+			0 === e.blend && r.clearRect(e.x, e.y, e.width, e.height);
+			const s = imageDataToCanvas(n, e.width, e.height);
+			r.drawImage(s, e.x, e.y);
+			const o = cloneCanvas(t);
+			s.width = 0, s.height = 0;
+			const h = 0 !== e.x || 0 !== e.y || e.width !== this.width || e.height !== this.height;
 			yield {
-				image,
-				delay: clampDelay(1000 * control.delayNum / control.delayDen),
+				image: o,
+				delay: clampDelay(1e3 * e.delayNum / e.delayDen),
 				width: this.width,
 				height: this.height,
-				rect: { x: control.x, y: control.y, width: control.width, height: control.height },
-				changedOnly,
-				composited: true,
-				compositionMode: control.blend === 1 ? 'overlay' : 'replace',
-				disposal: control.dispose,
-			};
-			if (control.dispose === 1) screenContext.clearRect(control.x, control.y, control.width, control.height);
-			else if (control.dispose === 2 && backup) screenContext.putImageData(backup, 0, 0);
+				rect: {
+					x: e.x,
+					y: e.y,
+					width: e.width,
+					height: e.height
+				},
+				changedOnly: h,
+				composited: !0,
+				compositionMode: 1 === e.blend ? "overlay" : "replace",
+				disposal: e.dispose
+			}, 1 === e.dispose ? r.clearRect(e.x, e.y, e.width, e.height) : 2 === e.dispose && a && r.putImageData(a, 0, 0);
 		}
 	}
-
 	async decode() {
-		const frames = [];
-		for await (const frame of this.stream()) frames.push(frame);
-		frames.repeat = this.playCount;
-		return frames;
+		const e = [];
+		for await (const t of this.stream()) e.push(t);
+		return e.repeat = this.playCount, e;
 	}
 }
 
 class WebMDecoder {
-	constructor(buffer, mimeType) {
-		this.buffer = buffer;
-		this.mimeType = mimeType || 'video/webm';
+	constructor(e, t) {
+		this.buffer = e, this.mimeType = t || "video/webm";
 	}
-
 	async open() {
-		const url = URL.createObjectURL(new Blob([this.buffer], { type: this.mimeType }));
-		const video = document.createElement('video');
-		video.src = url;
-		video.muted = true;
-		video.playsInline = true;
-		video.preload = 'auto';
+		const e = URL.createObjectURL(new Blob([ this.buffer ], {
+			type: this.mimeType
+		})), t = document.createElement("video");
+		t.src = e, t.muted = !0, t.playsInline = !0, t.preload = "auto";
 		try {
-			await new Promise((resolve, reject) => {
-				video.onloadedmetadata = resolve;
-				video.onerror = () => reject(new Error('Unable to decode WebM video.'));
+			await new Promise((e, r) => {
+				t.onloadedmetadata = e, t.onerror = () => r(new Error("Unable to decode WebM video."));
 			});
-			const width = video.videoWidth;
-			const height = video.videoHeight;
-			const duration = Number.isFinite(video.duration) ? video.duration : 0;
-			const fps = 30;
-			const frameCount = Math.max(1, Math.ceil(duration * fps));
-			const stream = (async function* () {
+			const r = t.videoWidth, i = t.videoHeight, n = Number.isFinite(t.duration) ? t.duration : 0, a = 30, s = Math.max(1, Math.ceil(n * a)), o = async function*() {
 				try {
-					video.pause();
-					for (let index = 0; index < frameCount; index += 1) {
-						const time = duration ? Math.min(index / fps, Math.max(0, duration - 0.001)) : 0;
-						await new Promise((resolve, reject) => {
-							const done = () => { video.removeEventListener('seeked', done); resolve(); };
-							const failed = () => { video.removeEventListener('error', failed); reject(new Error('WebM frame seek failed.')); };
-							video.addEventListener('seeked', done, { once: true });
-							video.addEventListener('error', failed, { once: true });
-							video.currentTime = time;
+					t.pause();
+					for (let e = 0; e < s; e += 1) {
+						const s = n ? Math.min(e / a, Math.max(0, n - .001)) : 0;
+						await new Promise((e, r) => {
+							const i = () => {
+								t.removeEventListener("seeked", i), e();
+							}, n = () => {
+								t.removeEventListener("error", n), r(new Error("WebM frame seek failed."));
+							};
+							t.addEventListener("seeked", i, {
+								once: !0
+							}), t.addEventListener("error", n, {
+								once: !0
+							}), t.currentTime = s;
 						});
-						const canvas = document.createElement('canvas');
-						canvas.width = width;
-						canvas.height = height;
-						canvas.getContext('2d').drawImage(video, 0, 0, width, height);
-						yield { image: canvas, delay: 1000 / fps, width, height, rect: { x: 0, y: 0, width, height }, changedOnly: false, composited: true, compositionMode: 'replace' };
+						const o = document.createElement("canvas");
+						o.width = r, o.height = i, o.getContext("2d").drawImage(t, 0, 0, r, i), yield {
+							image: o,
+							delay: 1e3 / a,
+							width: r,
+							height: i,
+							rect: {
+								x: 0,
+								y: 0,
+								width: r,
+								height: i
+							},
+							changedOnly: !1,
+							composited: !0,
+							compositionMode: "replace"
+						};
 					}
 				} finally {
-					video.pause();
-					video.removeAttribute('src');
-					video.load();
-					URL.revokeObjectURL(url);
+					t.pause(), t.removeAttribute("src"), t.load(), URL.revokeObjectURL(e);
 				}
-			})();
-			stream.frameCount = frameCount;
-			stream.repeat = 0;
-			return stream;
-		} catch (error) {
-			video.removeAttribute('src');
-			video.load();
-			URL.revokeObjectURL(url);
-			throw error;
+			}();
+			return o.frameCount = s, o.repeat = 0, o;
+		} catch (r) {
+			throw t.removeAttribute("src"), t.load(), URL.revokeObjectURL(e), r;
 		}
 	}
-
 	async decode() {
-		const stream = await this.open();
-		const frames = [];
-		for await (const frame of stream) frames.push(frame);
-		frames.repeat = stream.repeat;
-		return frames;
+		const e = await this.open(), t = [];
+		for await (const r of e) t.push(r);
+		return t.repeat = e.repeat, t;
 	}
 }
 
-async function decodeJXL(buffer) {
-	const url = URL.createObjectURL(new Blob([buffer], { type: 'image/jxl' }));
+async function decodeJXL(e) {
+	const t = URL.createObjectURL(new Blob([ e ], {
+		type: "image/jxl"
+	}));
 	try {
-		const image = new Image();
-		image.src = url;
-		await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = () => reject(new Error('Unable to decode JXL image.')); });
-		const canvas = document.createElement('canvas');
-		canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
-		canvas.getContext('2d').drawImage(image, 0, 0);
-		return [{ image: canvas, delay: 100, width: canvas.width, height: canvas.height, rect: { x: 0, y: 0, width: canvas.width, height: canvas.height }, changedOnly: false, composited: true, compositionMode: 'latest' }];
+		const e = new Image;
+		e.src = t, await new Promise((t, r) => {
+			e.onload = t, e.onerror = () => r(new Error("Unable to decode JXL image."));
+		});
+		const r = document.createElement("canvas");
+		return r.width = e.naturalWidth, r.height = e.naturalHeight, r.getContext("2d").drawImage(e, 0, 0), 
+		[ {
+			image: r,
+			delay: 100,
+			width: r.width,
+			height: r.height,
+			rect: {
+				x: 0,
+				y: 0,
+				width: r.width,
+				height: r.height
+			},
+			changedOnly: !1,
+			composited: !0,
+			compositionMode: "latest"
+		} ];
 	} finally {
-		URL.revokeObjectURL(url);
+		URL.revokeObjectURL(t);
 	}
 }
 
-function frameArraySource(frames) {
-	const source = {
-		frameCount: frames.length,
-		repeat: frames.repeat ?? null,
-		open: async () => (async function* () {
-			for (const frame of frames) yield frame;
-		}()),
+function frameArraySource(e) {
+	return {
+		frameCount: e.length,
+		repeat: e.repeat ?? null,
+		open: async () => async function*() {
+			for (const t of e) yield t;
+		}()
 	};
-	return source;
 }
 
-async function decodeAnimation(buffer, mimeType) {
-	const mime = String(mimeType || '').toLowerCase();
-	if (mime === 'image/gif') {
-		const source = {
-			frameCount: countGifImageDescriptors(new Uint8Array(buffer)),
-			repeat: readGifRepeat(new Uint8Array(buffer)),
+async function decodeAnimation(e, t) {
+	const r = String(t || "").toLowerCase();
+	if ("image/gif" === r) {
+		const t = new Uint8Array(e), r = {
+			frameCount: countGifImageDescriptors(t),
+			repeat: readGifRepeat(t),
 			open: async () => {
-				const decoder = new GIFDecoder(buffer);
-				const stream = (async function* () {
-					for await (const frame of decoder.stream()) yield frame;
-					source.repeat = decoder.repeat;
-				})();
-				return stream;
-			},
+				const t = new GIFDecoder(e);
+				return async function*() {
+					for await (const e of t.stream()) yield e;
+					r.repeat = t.repeat;
+				}();
+			}
 		};
-		return source;
+		return r;
 	}
-	if (mime === 'image/apng' || (mime === 'image/png' && isAnimatedBuffer(buffer, mime))) {
-		const probe = new PNGDecoder(buffer);
-		const parsed = probe.parseChunks();
+	if ("image/apng" === r || "image/png" === r && isAnimatedBuffer(e, r)) {
+		const t = new PNGDecoder(e);
 		return {
-			frameCount: parsed.frames.length,
-			repeat: probe.playCount,
-			open: async () => {
-				const decoder = new PNGDecoder(buffer);
-				return decoder.stream();
-			},
+			frameCount: t.parseChunks().frames.length,
+			repeat: t.playCount,
+			open: async () => new PNGDecoder(e).stream()
 		};
 	}
-	const nativeStream = await openImageDecoderStream(buffer, mime);
-	if (nativeStream) {
-		const frameCount = nativeStream.frameCount;
-		const repeat = nativeStream.repeat;
-		await nativeStream.return?.();
-		return {
-			frameCount,
-			repeat,
-			open: async () => openImageDecoderStream(buffer, mime),
+	const i = await openImageDecoderStream(e, r);
+	if (i) {
+		const t = i.frameCount, n = i.repeat;
+		return await (i.return?.()), {
+			frameCount: t,
+			repeat: n,
+			open: async () => openImageDecoderStream(e, r)
 		};
 	}
-	if (mime === 'video/webm') {
-		return {
-			frameCount: null,
-			repeat: 0,
-			open: async () => new WebMDecoder(buffer, mime).open(),
-		};
-	}
-	if (mime === 'image/jxl') return frameArraySource(await decodeJXL(buffer));
-	if (mime === 'image/webp') throw new Error('Animated WebP requires browser ImageDecoder support.');
-	throw new Error(`Unsupported animation format: ${mimeType}.`);
+	if ("video/webm" === r) return {
+		frameCount: null,
+		repeat: 0,
+		open: async () => new WebMDecoder(e, r).open()
+	};
+	if ("image/jxl" === r) return frameArraySource(await decodeJXL(e));
+	if ("image/webp" === r) throw new Error("Animated WebP requires browser ImageDecoder support.");
+	throw new Error(`Unsupported animation format: ${t}.`);
 }
