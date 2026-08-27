@@ -10,7 +10,7 @@ let loaded = false;
 let lastIndexMap = null;
 let lastW = 0,
 	lastH = 0;
-let animFrames = [];
+let animSource = null;
 let currentFrameIndex = 0;
 let processedAnimation = null;
 function isValidHexRGB(val) {
@@ -92,7 +92,8 @@ const downloadButton = document.getElementById("download");
 const statusDiv = document.getElementById("status");
 const textarea = document.getElementById("output");
 const previewContainer = document.querySelector(".image-preview-container");
-const canvas = document.querySelector("canvas");
+const outputImage = document.getElementById("output-image");
+const canvas = document.getElementById("process-canvas");
 const ctx = canvas.getContext("2d", { willReadFrequently: true });
 const inputWidth = document.getElementById("width");
 const inputHeight = document.getElementById("height");
@@ -112,14 +113,17 @@ const predefinedFileMediaType = {
 
 let originalImageSize = { width: 0, height: 0 };
 let originalMimeType = "image/png";
+let sourceExtension = "png";
 let canvasName = "pic2pa.png";
 let canvasLastName = ".png";
+let outputBlob = null;
+let outputObjectUrl = null;
 let rgbPalette = [];
 let uploadedFileBuffer = null;
 let isTextProcessing = false;
 let stopTextProcessingFlag = false;
 let curResizeMode = "=";
-let nextResizeMode = "-"
+let nextResizeMode = "-";
 
 // ---- OUTPUT TABS ----
 document.querySelectorAll(".tab-btn").forEach((btn) => {
@@ -442,12 +446,36 @@ function parseCurrentPalette() {
 // ============================================================
 //  IMAGE / ANIMATION LOAD
 // ============================================================
+function revokeOutputObjectUrl() {
+	if (outputObjectUrl) URL.revokeObjectURL(outputObjectUrl);
+	outputObjectUrl = null;
+}
+
+function setOutputBlob(blob) {
+	if (!outputImage || !blob) return;
+	revokeOutputObjectUrl();
+	outputBlob = blob;
+	outputObjectUrl = URL.createObjectURL(blob);
+	outputImage.src = outputObjectUrl;
+	outputImage.style.display = 'block';
+	outputImage.style.visibility = 'visible';
+	outputImage.setAttribute('aria-hidden', 'false');
+}
+
 function resetLoadedState() {
 	textarea.value = '';
 	asciiOutputTA.value = '';
 	lastIndexMap = null;
-	animFrames = [];
+	animSource = null;
 	processedAnimation = null;
+	outputBlob = null;
+	revokeOutputObjectUrl();
+	if (outputImage) {
+		outputImage.removeAttribute('src');
+		outputImage.style.display = 'block';
+		outputImage.style.visibility = 'hidden';
+		outputImage.setAttribute('aria-hidden', 'true');
+	}
 	uploadedFileBuffer = null;
 	setButtonState('noImage');
 }
@@ -462,8 +490,13 @@ function showLoadedPreview(preview, width, height, frameCount = 0) {
 	updateCalculatedDimensions();
 }
 
+function sourceExtensionOf(file) {
+	const match = String(file.name || '').match(/\.([^.]+)$/);
+	return (match ? match[1] : '').toLowerCase() || ({ 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'image/apng': 'apng', 'video/webm': 'webm' }[file.type] || 'png');
+}
+
 function sourceMime(file) {
-	const extension = file.name.toLowerCase().split('.').pop();
+	const extension = sourceExtensionOf(file);
 	const byExtension = { gif: 'image/gif', apng: 'image/apng', png: 'image/png', webp: 'image/webp', jpg: 'image/jpeg', jpeg: 'image/jpeg', jpe: 'image/jpeg', bmp: 'image/bmp', jxl: 'image/jxl', webm: 'video/webm' };
 	return file.type || byExtension[extension] || '';
 }
@@ -477,29 +510,43 @@ fileInput.addEventListener('change', async function () {
 	}
 	const mime = sourceMime(file);
 	if (!/^image\//.test(mime) && mime !== 'video/webm') {
-		statusDiv.textContent = `Invalid: ${file.name} is not a supported image or WebM file.`;
+		statusDiv.textContent = `Invalid: "${file.name}" is not a supported image or WebM file.`;
 		return;
 	}
+	statusDiv.textContent = `System: Loading asset of "${file.name}".`;
 	originalMimeType = mime;
-	canvasLastName = isAnimatedFormat(mime) || mime === 'video/webm' ? '.gif' : '.png';
+	sourceExtension = sourceExtensionOf(file);
+	canvasLastName = `.${sourceExtension}`;
 	uploadedFileBuffer = await file.arrayBuffer();
 	try {
-		const animated = isAnimatedFormat(mime) || isAnimatedBuffer(uploadedFileBuffer, mime);
+		const animated = mime === 'video/webm' || isAnimatedBuffer(uploadedFileBuffer, mime);
 		if (animated) {
-			animFrames = await decodeAnimation(uploadedFileBuffer, mime);
-			if (!animFrames.length) throw new Error('No decodable animation frames were found.');
-			const first = animFrames[0];
-			showLoadedPreview(first.image, first.width, first.height, animFrames.length);
-			statusDiv.textContent = `Ready: ${file.name} Loaded (${animFrames.length} frame${animFrames.length === 1 ? '' : 's'}).`;
-			addToSessionLog('ANIM', `Loaded ${mime} with ${animFrames.length} composited frame(s).`);
+			const source = await decodeAnimation(uploadedFileBuffer, mime);
+			const inspection = await inspectAnimationSource(source);
+			if (!inspection.first) throw new Error('No decodable animation frames were found.');
+			const preview = canvasPreviewImage(inspection.first.image);
+			const frameCount = inspection.frameCount || source.frameCount || 0;
+			if (inspection.visuallyStatic) {
+				animSource = null;
+				showLoadedPreview(preview, inspection.first.width, inspection.first.height);
+				uploadedFileBuffer = null;
+				statusDiv.textContent = `Ready: "${file.name}" Loaded as a static image.`;
+				addToSessionLog('IMAGE', `Loaded "${mime}" as static output (${frameCount || 1} visually identical frame(s)).`);
+			} else {
+				animSource = source;
+				showLoadedPreview(preview, inspection.first.width, inspection.first.height, frameCount);
+				statusDiv.textContent = `Ready: "${file.name}" Loaded (${frameCount ? `${frameCount} ` : ''}frame${frameCount === 1 ? '' : 's'}).`;
+				addToSessionLog('ANIM', `Loaded "${mime}" as a streaming animation source${frameCount ? ` with ${frameCount} frame(s)` : ''}.`);
+			}
+			releaseFrame(inspection.first);
 		} else {
 			const url = URL.createObjectURL(file);
 			const image = new Image();
 			image.onload = () => {
 				URL.revokeObjectURL(url);
 				showLoadedPreview(image, image.naturalWidth, image.naturalHeight);
-				statusDiv.textContent = `Ready: ${file.name} Loaded Successfully.`;
-				addToSessionLog('IMAGE', `Loaded ${mime} source image.`);
+				statusDiv.textContent = `Ready: "${file.name}" Loaded Successfully.`;
+				addToSessionLog('IMAGE', `Loaded "${mime}" source image.`);
 			};
 			image.onerror = () => {
 				URL.revokeObjectURL(url);
@@ -512,6 +559,98 @@ fileInput.addEventListener('change', async function () {
 		resetLoadedState();
 	}
 });
+
+function canvasPreviewImage(source) {
+	if (!(source instanceof HTMLCanvasElement)) return source;
+	const image = new Image();
+	image.alt = 'Original image preview';
+	image.src = source.toDataURL('image/png');
+	return image;
+}
+
+async function inspectAnimationSource(source) {
+	const stream = await source.open();
+	if (!stream) return { first: null, frameCount: 0, visuallyStatic: false };
+	let first = null;
+	let reference = null;
+	let frameCount = 0;
+	let visuallyStatic = true;
+	for await (const frame of stream) {
+		frameCount += 1;
+		if (!first) {
+			first = frame;
+			reference = frame.image.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, frame.width, frame.height).data;
+			continue;
+		}
+		if (frame.width !== first.width || frame.height !== first.height) visuallyStatic = false;
+		if (visuallyStatic) {
+			const data = frame.image.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, frame.width, frame.height).data;
+			if (data.length !== reference.length) visuallyStatic = false;
+			else for (let pixel = 0; pixel < data.length; pixel += 1) {
+				if (data[pixel] !== reference[pixel]) {
+					visuallyStatic = false;
+					break;
+				}
+			}
+		}
+		releaseFrame(frame);
+	}
+	return { first, frameCount, visuallyStatic };
+}
+
+function fileStem() {
+	const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+	return `pic2pa-${timestamp}`;
+}
+
+function canvasToBlob(targetCanvas, mimeType = 'image/png', quality) {
+	return new Promise((resolve, reject) => {
+		if (targetCanvas.toBlob) {
+			targetCanvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('Canvas export returned no data.')), mimeType, quality);
+			return;
+		}
+		try {
+			const dataUrl = targetCanvas.toDataURL(mimeType, quality);
+			const [header, body] = dataUrl.split(',');
+			const binary = atob(body);
+			const bytes = new Uint8Array(binary.length);
+			for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+			resolve(new Blob([bytes], { type: header.match(/data:([^;]+)/)?.[1] || mimeType }));
+		} catch (error) { reject(error); }
+	});
+}
+
+const OUTPUT_MIME_TYPES = Object.freeze({ png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', jpe: 'image/jpeg', bmp: 'image/bmp', gif: 'image/gif', webp: 'image/webp', apng: 'image/apng' });
+
+function outputMimeForExtension(extension) {
+	return OUTPUT_MIME_TYPES[extension] || '';
+}
+
+function assertBlobType(blob, expectedType, extension) {
+	if (!blob || (expectedType && blob.type && blob.type.toLowerCase() !== expectedType)) throw new Error(`This browser could not produce a valid ${extension.toUpperCase()} output.`);
+	return blob;
+}
+
+async function encodeStaticOutput(result, width, height) {
+	if (sourceExtension === 'jxl' || sourceExtension === 'webm') throw new Error(`This browser cannot encode processed ${sourceExtension.toUpperCase()} output without changing the requested extension.`);
+	if (sourceExtension === 'gif') return encodeAnimatedGif({ width, height, frames: [{ indexMap: result.indexMap, width, height, rect: { x: 0, y: 0, width, height }, delay: 100, disposal: 0 }], repeat: null });
+	if (sourceExtension === 'bmp') return encodeBmpFromCanvas(canvas);
+	if (sourceExtension === 'apng') {
+		const writer = createApngStreamWriter({ width, height, frameCount: 1, repeat: null });
+		writer.add({ indexMap: result.indexMap, rect: { x: 0, y: 0, width, height }, delay: 100, disposal: 0, changedOnly: false });
+		return writer.finish();
+	}
+	const mime = outputMimeForExtension(sourceExtension) || 'image/png';
+	return assertBlobType(await canvasToBlob(canvas, mime), mime, sourceExtension);
+}
+
+function releaseFrame(frame) {
+	if (frame?.image instanceof HTMLCanvasElement) {
+		frame.image.width = 0;
+		frame.image.height = 0;
+		frame.image = null;
+	}
+}
 
 function updateCalculatedDimensions() {
 	if (
@@ -593,6 +732,7 @@ inputHeight.addEventListener("input", function () {
 parametersForm.addEventListener("submit", async function (e) {
 	e.preventDefault();
 	if (runButton.disabled) return;
+	textarea.value = "";
 
 	try {
 		const img = document.querySelector(
@@ -600,8 +740,7 @@ parametersForm.addEventListener("submit", async function (e) {
 		);
 		if (!img) return;
 
-		const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-		canvasName = `pic2pa-${timestamp}${animFrames.length ? '.gif' : '.png'}`;
+		canvasName = `${fileStem()}.${sourceExtension}`;
 		processedAnimation = null;
 		parseCurrentPalette();
 
@@ -617,7 +756,7 @@ parametersForm.addEventListener("submit", async function (e) {
 		asciiOutputTA.value = "";
 
 		// Handle animation frames
-		if (animFrames.length > 0) {
+		if (animSource) {
 			await processAnimation(w, h);
 			setButtonState("done");
 			if (stopTextProcessingFlag) {
@@ -662,8 +801,9 @@ parametersForm.addEventListener("submit", async function (e) {
 			});
 			ctx.putImageData(outImgData, 0, 0);
 		} else {
-			result = await runCPUPipelineFallback(imgData, w, h, outImgData, hasAlpha);
+			result = await runCPUPipelineFallback(imgData, w, h, outImgData, null, hasAlpha);
 		}
+		ctx.putImageData(outImgData, 0, 0);
 		setButtonState("almost");
 
 		// Progressive textarea output: append line by line
@@ -691,6 +831,8 @@ parametersForm.addEventListener("submit", async function (e) {
 		}
 
 		setButtonState("done");
+			outputBlob = await encodeStaticOutput(result, w, h);
+		setOutputBlob(outputBlob);
 		if (stopTextProcessingFlag) {
 			statusDiv.textContent = "Text output generation stopped by user.";
 		} else {
@@ -740,11 +882,21 @@ async function progressiveTextOutput(fullString, progressInterval) {
 }
 
 async function processAnimation(w, h) {
-	const allResults = [];
-	const outputFrames = [];
+	const source = animSource;
+	const stream = await source.open();
+	if (!stream) throw new Error('Unable to open animation frame stream.');
+	const repeat = source.repeat ?? stream.repeat ?? null;
+	const frameCount = source.frameCount || stream.frameCount || 0;
+	const writer = createAnimatedOutputWriter(sourceExtension, { width: w, height: h, repeat, frameCount });
 	const engine = engineSelect.value;
-	for (let index = 0; index < animFrames.length; index += 1) {
-		const frame = animFrames[index];
+	let previousIndexMap = null;
+	let index = 0;
+	let textStarted = false;
+	let textChars = 1;
+	let textTruncated = false;
+	const maxTextChars = 4 * 1024 * 1024;
+	textarea.value = '[';
+	for await (const frame of stream) {
 		ctx.globalCompositeOperation = 'copy';
 		ctx.clearRect(0, 0, w, h);
 		ctx.drawImage(frame.image, 0, 0, w, h);
@@ -752,32 +904,83 @@ async function processAnimation(w, h) {
 		const imgData = ctx.getImageData(0, 0, w, h);
 		const outImgData = ctx.createImageData(w, h);
 		const hasAlpha = imageDataHasAlpha(imgData.data);
+		const totalLabel = frameCount ? `/${frameCount}` : '';
 		const result = engine === 'gpu'
 			? await runGLPipeline({ canvas, data: imgData.data, w, h, mode: modeSelect.value, rgbPalette, outImgData, hasAlpha, onProgress: async () => {} })
-			: await runCPUPipelineFallback(imgData, w, h, outImgData, hasAlpha);
-		allResults.push(result.hexString);
-		outputFrames.push({
-			indexMap: new Uint8Array(result.indexMap),
-			delay: frame.delay,
-			width: w,
-			height: h,
-		});
+			: await runCPUPipelineFallback(imgData, w, h, outImgData, `Frame: ${index+1}${totalLabel}`, hasAlpha);
+		const fullIndexMap = result.indexMap instanceof Uint8Array ? result.indexMap : new Uint8Array(result.indexMap);
+		const delta = makeOutputDelta(fullIndexMap, previousIndexMap, w, h, frame);
+		previousIndexMap = fullIndexMap;
 		ctx.putImageData(outImgData, 0, 0);
-		runButton.textContent = `Converting frame ${index + 1}/${animFrames.length}...`;
-		statusDiv.textContent = `Processing frame ${index + 1} of ${animFrames.length}...`;
+		await writer.add({ ...delta, delay: frame.delay, disposal: frame.disposal ?? 0, compositionMode: delta.changedOnly ? 'overlay' : 'replace' });
+//		if (!textTruncated) {
+			const textPiece = `${textStarted ? ',\n' : '\n'}${result.hexString}`;
+//			if (textChars + textPiece.length <= maxTextChars) {
+				textarea.value += textPiece;
+				textChars += textPiece.length;
+//			} else {
+//				textarea.value += '\n/* text output truncated for memory safety; image frames continue */';
+//				textTruncated = true;
+//			}
+//		}
+		textStarted = true;
+		index += 1;
+		if (engine === 'gpu') {
+			runButton.textContent = `Converting frame ${index}${totalLabel}...`;
+			statusDiv.textContent = `Processing frame ${index}${totalLabel}...`;
+		}
+		releaseFrame(frame);
 		await new Promise((resolve) => requestAnimationFrame(resolve));
 	}
+	if (!index) throw new Error('Animation stream returned no frames.');
+	if (!textTruncated) textarea.value += '\n]';
 	processedAnimation = {
-		mimeType: 'image/gif',
+		mimeType: originalMimeType,
 		width: w,
 		height: h,
-		frames: outputFrames,
-		repeat: animFrames.repeat ?? 0,
+		frameCount: index,
+		repeat,
+		streamed: true,
+		textTruncated,
 	};
+	setOutputBlob(await writer.finish());
 	setButtonState('almost');
-	await progressiveTextOutput(`[\n${allResults.join(',\n')}\n]`);
+	isTextProcessing = false;
+	copyButton.textContent = 'Copy to Clipboard';
 }
 
+function makeOutputDelta(current, previous, width, height, sourceFrame) {
+	if (!previous || !sourceFrame.changedOnly) return { indexMap: current, width, height, rect: { x: 0, y: 0, width, height }, changedOnly: false };
+	const sourceWidth = sourceFrame.sourceWidth || sourceFrame.width || width;
+	const sourceHeight = sourceFrame.sourceHeight || sourceFrame.height || height;
+	const sourceRect = sourceFrame.rect || { x: 0, y: 0, width: sourceWidth, height: sourceHeight };
+	const scaleX = width / sourceWidth;
+	const scaleY = height / sourceHeight;
+	let left = Math.max(0, Math.floor(sourceRect.x * scaleX));
+	let top = Math.max(0, Math.floor(sourceRect.y * scaleY));
+	let right = Math.min(width, Math.ceil((sourceRect.x + sourceRect.width) * scaleX));
+	let bottom = Math.min(height, Math.ceil((sourceRect.y + sourceRect.height) * scaleY));
+	let found = false;
+	for (let y = top; y < bottom; y += 1) {
+		for (let x = left; x < right; x += 1) {
+			const offset = y * width + x;
+			if (current[offset] !== previous[offset]) {
+				found = true;
+				left = Math.min(left, x); right = Math.max(right, x + 1); top = Math.min(top, y); bottom = Math.max(bottom, y + 1);
+			}
+		}
+	}
+	if (!found) { left = Math.max(0, Math.min(width - 1, Math.floor(sourceRect.x * scaleX))); top = Math.max(0, Math.min(height - 1, Math.floor(sourceRect.y * scaleY))); right = left + 1; bottom = top + 1; }
+	const patch = new Uint8Array(Math.max(1, right - left) * Math.max(1, bottom - top));
+	let target = 0;
+	for (let y = top; y < bottom; y += 1) {
+		for (let x = left; x < right; x += 1) {
+			const offset = y * width + x;
+			patch[target++] = current[offset] === previous[offset] ? 0 : current[offset];
+		}
+	}
+	return { indexMap: patch, width: right - left, height: bottom - top, rect: { x: left, y: top, width: right - left, height: bottom - top }, changedOnly: true };
+}
 // True if any pixel in this ImageData has partial/zero alpha — i.e. the
 // source image actually has a transparent background, not just a fully
 // opaque photo/JPEG. Used to decide whether alphaColor is honored.
@@ -788,7 +991,7 @@ function imageDataHasAlpha(data) {
 	return false;
 }
 
-async function runCPUPipelineFallback(imgData, w, h, outImgData, hasAlpha = imageDataHasAlpha(imgData.data)) {
+async function runCPUPipelineFallback(imgData, w, h, outImgData, exstatus, hasAlpha = imageDataHasAlpha(imgData.data)) {
 	return runConversionPipeline({
 		data: imgData.data,
 		w,
@@ -800,8 +1003,8 @@ async function runCPUPipelineFallback(imgData, w, h, outImgData, hasAlpha = imag
 		hasAlpha,
 		onProgress: async (progressPercent) => {
 			ctx.putImageData(outImgData, 0, 0);
-			runButton.textContent = `Converting... ${progressPercent}%`;
-			statusDiv.textContent = `Processing CPU pipeline... ${progressPercent}%`;
+			runButton.textContent = `${exstatus?`${exstatus}, `:""}Converting... ${progressPercent}%`;
+			statusDiv.textContent = `${exstatus?`${exstatus}, `:""}Processing CPU pipeline... ${progressPercent}%`;
 			await new Promise((resolve) => requestAnimationFrame(resolve));
 		},
 	});
@@ -838,9 +1041,6 @@ function writeGifWord(bytes, value) {
 }
 
 function encodeGifLzw(indices, minimumCodeSize) {
-	// Emit literal palette indices with a clear code before each index. This
-	// deliberately keeps the code width constant and avoids malformed streams
-	// caused by encoder/decoder dictionary-width drift on large frames.
 	const clear = 1 << minimumCodeSize;
 	const end = clear + 1;
 	const codeSize = minimumCodeSize + 1;
@@ -857,60 +1057,35 @@ function encodeGifLzw(indices, minimumCodeSize) {
 		}
 	};
 	writeCode(clear);
-	for (const index of indices) {
-		writeCode(index);
-		writeCode(clear);
-	}
+	for (const index of indices) { writeCode(index); writeCode(clear); }
 	writeCode(end);
 	if (bitCount) output.push(bitBuffer & 255);
 	return output;
 }
 
-function paletteIndexData(frame, palette) {
-	const indices = new Uint8Array(frame.width * frame.height);
-	const cache = new Map();
-	for (let pixel = 0; pixel < indices.length; pixel += 1) {
-		const offset = pixel * 4;
-		if (frame.data[offset + 3] < 128) {
-			indices[pixel] = 0;
-			continue;
-		}
-		const key = (frame.data[offset] << 16) | (frame.data[offset + 1] << 8) | frame.data[offset + 2];
-		let best = cache.get(key);
-		if (best === undefined) {
-			best = 1;
-			let score = Infinity;
-			for (let index = 1; index < palette.length; index += 1) {
-				const color = palette[index];
-				const dr = frame.data[offset] - color.r;
-				const dg = frame.data[offset + 1] - color.g;
-				const db = frame.data[offset + 2] - color.b;
-				const current = dr * dr + dg * dg + db * db;
-				if (current < score) { score = current; best = index; }
-			}
-			cache.set(key, best);
-		}
-		indices[pixel] = best;
-	}
-	return indices;
-}
-
 function encodeAnimatedGif(animation) {
-	const palette = rgbPalette.slice(0, 256);
+	const palette = rgbPalette.slice(0, 256).map((color) => ({ r: color.r, g: color.g, b: color.b, a: color.a }));
 	if (!palette.length || palette[0].a !== 0) palette.unshift({ r: 0, g: 0, b: 0, a: 0 });
 	const tableSize = Math.max(2, 2 ** Math.ceil(Math.log2(palette.length)));
 	while (palette.length < tableSize) palette.push({ r: 0, g: 0, b: 0, a: 0 });
 	const minimumCodeSize = Math.max(2, Math.ceil(Math.log2(tableSize)));
 	const bytes = [...'GIF89a'].map((char) => char.charCodeAt(0));
 	writeGifWord(bytes, animation.width); writeGifWord(bytes, animation.height);
-	const colorResolution = 0x70;
-	bytes.push(0x80 | colorResolution | (minimumCodeSize - 1), 0, 0);
+	bytes.push(0x80 | 0x70 | (minimumCodeSize - 1), 0, 0);
 	for (const color of palette) bytes.push(color.r, color.g, color.b);
+	if (animation.repeat !== null && animation.repeat !== undefined) {
+		bytes.push(0x21, 0xff, 0x0b);
+		for (const char of 'NETSCAPE2.0') bytes.push(char.charCodeAt(0));
+		bytes.push(0x03, 0x01, animation.repeat & 255, (animation.repeat >> 8) & 255, 0x00);
+	}
 	for (const frame of animation.frames) {
-		const indices = frame.indexMap || paletteIndexData(frame, palette);
-		const delay = Math.min(65535, Math.max(1, Math.round(frame.delay / 10)));
-		bytes.push(0x21, 0xf9, 0x04, 0x01); writeGifWord(bytes, delay); bytes.push(0, 0);
-		bytes.push(0x2c); writeGifWord(bytes, 0); writeGifWord(bytes, 0); writeGifWord(bytes, animation.width); writeGifWord(bytes, animation.height); bytes.push(0);
+		const rect = frame.rect || { x: 0, y: 0, width: animation.width, height: animation.height };
+		const indices = frame.indexMap || new Uint8Array(rect.width * rect.height);
+		const delay = Math.min(65535, Math.max(1, Math.round((frame.delay || 100) / 10)));
+		const disposal = Math.max(0, Math.min(7, frame.disposal | 0));
+		bytes.push(0x21, 0xf9, 0x04, (disposal << 2) | 0x01);
+		writeGifWord(bytes, delay); bytes.push(0, 0);
+		bytes.push(0x2c); writeGifWord(bytes, rect.x); writeGifWord(bytes, rect.y); writeGifWord(bytes, rect.width); writeGifWord(bytes, rect.height); bytes.push(0);
 		const compressed = encodeGifLzw(indices, minimumCodeSize);
 		bytes.push(minimumCodeSize);
 		for (let offset = 0; offset < compressed.length; offset += 255) {
@@ -923,6 +1098,252 @@ function encodeAnimatedGif(animation) {
 	return new Blob([new Uint8Array(bytes)], { type: 'image/gif' });
 }
 
+function paletteForOutput() {
+	const palette = rgbPalette.slice(0, 256).map((color) => ({ r: color.r, g: color.g, b: color.b, a: color.a }));
+	if (!palette.length || palette[0].a !== 0) palette.unshift({ r: 0, g: 0, b: 0, a: 0 });
+	return palette;
+}
+
+function createGifStreamWriter(animation) {
+	const palette = paletteForOutput();
+	const tableSize = Math.max(2, 2 ** Math.ceil(Math.log2(palette.length)));
+	while (palette.length < tableSize) palette.push({ r: 0, g: 0, b: 0, a: 0 });
+	const minimumCodeSize = Math.max(2, Math.ceil(Math.log2(tableSize)));
+	const header = [...'GIF89a'].map((char) => char.charCodeAt(0));
+	writeGifWord(header, animation.width);
+	writeGifWord(header, animation.height);
+	header.push(0x80 | 0x70 | (minimumCodeSize - 1), 0, 0);
+	for (const color of palette) header.push(color.r, color.g, color.b);
+	const parts = [new Uint8Array(header)];
+	if (animation.repeat !== null && animation.repeat !== undefined) {
+		const loop = [0x21, 0xff, 0x0b, ...'NETSCAPE2.0'.split('').map((char) => char.charCodeAt(0)), 0x03, 0x01, animation.repeat & 255, (animation.repeat >> 8) & 255, 0x00];
+		parts.push(new Uint8Array(loop));
+	}
+	return {
+		add(frame) {
+			const rect = frame.rect || { x: 0, y: 0, width: animation.width, height: animation.height };
+			const indices = frame.indexMap || new Uint8Array(rect.width * rect.height);
+			const delay = Math.min(65535, Math.max(1, Math.round((frame.delay || 100) / 10)));
+			const disposal = Math.max(0, Math.min(7, frame.disposal | 0));
+			const bytes = [0x21, 0xf9, 0x04, (disposal << 2) | 0x01];
+			writeGifWord(bytes, delay);
+			bytes.push(0, 0, 0x2c);
+			writeGifWord(bytes, rect.x);
+			writeGifWord(bytes, rect.y);
+			writeGifWord(bytes, rect.width);
+			writeGifWord(bytes, rect.height);
+			bytes.push(0);
+			const compressed = encodeGifLzw(indices, minimumCodeSize);
+			bytes.push(minimumCodeSize);
+			for (let offset = 0; offset < compressed.length; offset += 255) {
+				const block = compressed.slice(offset, offset + 255);
+				bytes.push(block.length, ...block);
+			}
+			bytes.push(0);
+			parts.push(new Uint8Array(bytes));
+		},
+		finish() {
+			parts.push(new Uint8Array([0x3b]));
+			return new Blob(parts, { type: 'image/gif' });
+		},
+	};
+}
+
+function crc32(bytes) {
+	let crc = 0xffffffff;
+	for (const byte of bytes) {
+		crc ^= byte;
+		for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+	}
+	return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type, data) {
+	const typeBytes = new Uint8Array([...type].map((char) => char.charCodeAt(0)));
+	const body = new Uint8Array(typeBytes.length + data.length);
+	body.set(typeBytes);
+	body.set(data, typeBytes.length);
+	const result = new Uint8Array(12 + data.length);
+	const view = new DataView(result.buffer);
+	view.setUint32(0, data.length);
+	result.set(body, 4);
+	view.setUint32(8 + data.length, crc32(body));
+	return result;
+}
+
+function adler32(bytes) {
+	let a = 1;
+	let b = 0;
+	for (const byte of bytes) {
+		a = (a + byte) % 65521;
+		b = (b + a) % 65521;
+	}
+	return ((b << 16) | a) >>> 0;
+}
+
+function zlibStore(bytes) {
+	const parts = [new Uint8Array([0x78, 0x01])];
+	for (let offset = 0; offset < bytes.length || offset === 0; offset += 65535) {
+		const end = Math.min(bytes.length, offset + 65535);
+		const length = end - offset;
+		const block = new Uint8Array(5 + length);
+		block[0] = end >= bytes.length ? 1 : 0;
+		block[1] = length & 255;
+		block[2] = (length >> 8) & 255;
+		const inverse = (~length) & 0xffff;
+		block[3] = inverse & 255;
+		block[4] = inverse >> 8;
+		block.set(bytes.subarray(offset, end), 5);
+		parts.push(block);
+		if (end >= bytes.length) break;
+	}
+	const checksum = new Uint8Array(4);
+	new DataView(checksum.buffer).setUint32(0, adler32(bytes));
+	parts.push(checksum);
+	const result = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+	let target = 0;
+	for (const part of parts) {
+		result.set(part, target);
+		target += part.length;
+	}
+	return result;
+}
+
+function pngIndexedFrame(indexMap, width, height) {
+	const raw = new Uint8Array((width + 1) * height);
+	for (let y = 0; y < height; y += 1) {
+		raw[y * (width + 1)] = 0;
+		raw.set(indexMap.subarray(y * width, (y + 1) * width), y * (width + 1) + 1);
+	}
+	return zlibStore(raw);
+}
+
+function createApngStreamWriter(animation) {
+	const palette = paletteForOutput();
+	const parts = [new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])];
+	const ihdr = new Uint8Array(13);
+	const ihdrView = new DataView(ihdr.buffer);
+	ihdrView.setUint32(0, animation.width);
+	ihdrView.setUint32(4, animation.height);
+	ihdr[8] = 8;
+	ihdr[9] = 3;
+	parts.push(pngChunk('IHDR', ihdr));
+	const plte = new Uint8Array(palette.length * 3);
+	const trns = new Uint8Array(palette.length);
+	palette.forEach((color, index) => {
+		plte[index * 3] = color.r;
+		plte[index * 3 + 1] = color.g;
+		plte[index * 3 + 2] = color.b;
+		trns[index] = color.a;
+	});
+	parts.push(pngChunk('PLTE', plte), pngChunk('tRNS', trns));
+	const acTL = new Uint8Array(8);
+	const acTLView = new DataView(acTL.buffer);
+	acTLView.setUint32(0, animation.frameCount || 1);
+	acTLView.setUint32(4, animation.repeat ?? 0);
+	parts.push(pngChunk('acTL', acTL));
+	let sequence = 0;
+	let frameIndex = 0;
+	return {
+		add(frame) {
+			const rect = frame.rect || { x: 0, y: 0, width: animation.width, height: animation.height };
+			const control = new Uint8Array(26);
+			const view = new DataView(control.buffer);
+			view.setUint32(0, sequence++);
+			view.setUint32(4, rect.width);
+			view.setUint32(8, rect.height);
+			view.setUint32(12, rect.x);
+			view.setUint32(16, rect.y);
+			const delay = Math.max(1, Math.round(frame.delay || 100));
+			view.setUint16(20, Math.min(65535, delay));
+			view.setUint16(22, 1000);
+			control[24] = frame.disposal === 3 ? 2 : frame.disposal === 2 ? 1 : 0;
+			control[25] = frame.changedOnly ? 1 : 0;
+			parts.push(pngChunk('fcTL', control));
+			const compressed = pngIndexedFrame(frame.indexMap || new Uint8Array(rect.width * rect.height), rect.width, rect.height);
+			if (frameIndex === 0) parts.push(pngChunk('IDAT', compressed));
+			else {
+				const data = new Uint8Array(compressed.length + 4);
+				new DataView(data.buffer).setUint32(0, sequence++);
+				data.set(compressed, 4);
+				parts.push(pngChunk('fdAT', data));
+			}
+			frameIndex += 1;
+		},
+		finish() {
+			parts.push(pngChunk('IEND', new Uint8Array(0)));
+			return new Blob(parts, { type: 'image/apng' });
+		},
+	};
+}
+
+function createWebmStreamWriter(animation) {
+	if (!canvas.captureStream || typeof MediaRecorder === 'undefined') throw new Error('This browser cannot encode processed WebM output safely.');
+	const capture = canvas.captureStream(0);
+	const track = capture.getVideoTracks()[0];
+	const mimeType = typeof MediaRecorder.isTypeSupported !== 'function' || MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : '';
+	if (!mimeType) {
+		capture.getTracks().forEach((item) => item.stop());
+		throw new Error('This browser does not provide a WebM MediaRecorder.');
+	}
+	const chunks = [];
+	const recorder = new MediaRecorder(capture, { mimeType, videoBitsPerSecond: 4_000_000 });
+	const stopped = new Promise((resolve, reject) => {
+		recorder.addEventListener('dataavailable', (event) => { if (event.data?.size) chunks.push(event.data); });
+		recorder.addEventListener('stop', resolve, { once: true });
+		recorder.addEventListener('error', () => reject(new Error('WebM recording failed.')), { once: true });
+	});
+	recorder.start();
+	return {
+		async add(frame) {
+			if (track.requestFrame) track.requestFrame();
+			else await new Promise((resolve) => setTimeout(resolve, Math.max(10, frame.delay || 100)));
+		},
+		async finish() {
+			if (recorder.state !== 'inactive') recorder.stop();
+			await stopped;
+			capture.getTracks().forEach((item) => item.stop());
+			return new Blob(chunks, { type: mimeType });
+		},
+	};
+}
+
+function createAnimatedOutputWriter(extension, animation) {
+	if (extension === 'gif') return createGifStreamWriter(animation);
+	if (extension === 'apng' || extension === 'png') return createApngStreamWriter(animation);
+	if (extension === 'webm') return createWebmStreamWriter(animation);
+	throw new Error(`Animated ${extension.toUpperCase()} output cannot be encoded safely in this browser without changing the requested extension.`);
+}
+
+function encodeBmpFromCanvas(targetCanvas) {
+	const width = targetCanvas.width;
+	const height = targetCanvas.height;
+	const pixels = targetCanvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, width, height).data;
+	const rowSize = Math.ceil((width * 3) / 4) * 4;
+	const pixelSize = rowSize * height;
+	const result = new Uint8Array(54 + pixelSize);
+	const view = new DataView(result.buffer);
+	result[0] = 0x42; result[1] = 0x4d;
+	view.setUint32(2, result.length, true);
+	view.setUint32(10, 54, true);
+	view.setUint32(14, 40, true);
+	view.setInt32(18, width, true);
+	view.setInt32(22, -height, true);
+	view.setUint16(26, 1, true);
+	view.setUint16(28, 24, true);
+	view.setUint32(34, pixelSize, true);
+	for (let y = 0; y < height; y += 1) {
+		for (let x = 0; x < width; x += 1) {
+			const source = (y * width + x) * 4;
+			const target = 54 + y * rowSize + x * 3;
+			result[target] = pixels[source + 2];
+			result[target + 1] = pixels[source + 1];
+			result[target + 2] = pixels[source];
+		}
+	}
+	return new Blob([result], { type: 'image/bmp' });
+}
+
 function downloadBlob(blob, filename) {
 	const url = URL.createObjectURL(blob);
 	const link = document.createElement('a');
@@ -933,13 +1354,15 @@ function downloadBlob(blob, filename) {
 downloadButton.addEventListener('click', async function (e) {
 	e.preventDefault();
 	try {
-		if (processedAnimation?.frames?.length) {
-			downloadBlob(encodeAnimatedGif(processedAnimation), canvasName.replace(/\.[^.]+$/, '.gif'));
-			addToSessionLog('IO', `Downloaded processed animation (${processedAnimation.frames.length} frames).`);
+		if (processedAnimation?.streamed) {
+			if (!outputBlob) throw new Error('The streamed animation output is not ready.');
+			downloadBlob(outputBlob, canvasName);
+			addToSessionLog('IO', `Downloaded processed animation (${processedAnimation.frameCount} frames).`);
 			return;
 		}
-		const blob = await new Promise((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Canvas export returned no data.')), 'image/png'));
-		downloadBlob(blob, canvasName.replace(/\.[^.]+$/, '.png'));
+		const blob = outputBlob || await encodeStaticOutput({ indexMap: lastIndexMap }, lastW, lastH);
+		setOutputBlob(blob);
+		downloadBlob(blob, canvasName);
 	} catch (error) {
 		displayErrorPopup('IO Canvas Download Error', error.message, error.stack);
 	}
