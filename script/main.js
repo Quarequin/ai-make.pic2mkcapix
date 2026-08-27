@@ -1,18 +1,9 @@
-// maincode.js — Main Application Controller
 // Modular imports: CPU engine, GPU engine, animation processor
 
 //import { runConversionPipeline, exportAscii } from "./matrixcl.js";
 //import { runGLPipeline } from "./matrixgl.js";
 //import { decodeAnimation, isAnimatedFormat } from "./animproc.js";
 
-const htmlLog = [];
-let loaded = false;
-let lastIndexMap = null;
-let lastW = 0,
-	lastH = 0;
-let animSource = null;
-let currentFrameIndex = 0;
-let processedAnimation = null;
 function isValidHexRGB(val) {
 	return (/^#[0-9A-Fa-f]{8}$/.test(val)||/^#[0-9A-Fa-f]{6}$/.test(val)||/^#[0-9A-Fa-f]{3,4}$/.test(val))
 }
@@ -70,60 +61,6 @@ function detectWebGL() {
 	}
 }
 const webglSupported = detectWebGL();
-
-// ---- ELEMENT REFS ----
-const fileInput = document.getElementById("file");
-const paletteFileInput = document.getElementById("palette-file-reader");
-const predefinedPaletteSelect = document.getElementById(
-	"predefined-palette-select",
-);
-const modeSelect = document.getElementById("mode-select");
-const subpixelSelect = document.getElementById("subpixel-select");
-const engineSelect = document.getElementById("engine-select");
-const asciiEnableCheck = document.getElementById("ascii-enable");
-const asciiSubOptions = document.getElementById("ascii-sub-options");
-const asciiCharsetSelect = document.getElementById("ascii-charset-select");
-const asciiWidthInput = document.getElementById("ascii-width-input");
-const asciiTabBtn = document.getElementById("ascii-tab-btn");
-const asciiOutputTA = document.getElementById("ascii-output");
-const runButton = document.getElementById("run");
-const copyButton = document.getElementById("copy");
-const downloadButton = document.getElementById("download");
-const statusDiv = document.getElementById("status");
-const textarea = document.getElementById("output");
-const previewContainer = document.querySelector(".image-preview-container");
-const outputImage = document.getElementById("output-image");
-const canvas = document.getElementById("process-canvas");
-const ctx = canvas.getContext("2d", { willReadFrequently: true });
-const inputWidth = document.getElementById("width");
-const inputHeight = document.getElementById("height");
-const inputFactor = document.getElementById("factor");
-const inputRatio = document.getElementById("ratio");
-const parametersForm = document.getElementById("parameters");
-const colorpad = document.getElementById("colorpad");
-const paletteAddBtn = document.getElementById("palette-add-btn");
-const paletteRemoveBtn = document.getElementById("palette-remove-btn");
-const paletteCountLbl = document.getElementById("palette-count-label");
-const predefinedFileMediaType = {
-	"image/png":"png","image/jpeg":"jpeg","image/jpg":"jpg",
-	"image/jpe":"jpe","image/jxl":"jxl","image/bmp":"bmp",
-	"image/gif":"gif","image/webp":"webp","image/apng":"apng",
-	"video/webm":"webm"
-};
-
-let originalImageSize = { width: 0, height: 0 };
-let originalMimeType = "image/png";
-let sourceExtension = "png";
-let canvasName = "pic2pa.png";
-let canvasLastName = ".png";
-let outputBlob = null;
-let outputObjectUrl = null;
-let rgbPalette = [];
-let uploadedFileBuffer = null;
-let isTextProcessing = false;
-let stopTextProcessingFlag = false;
-let curResizeMode = "=";
-let nextResizeMode = "-";
 
 // ---- OUTPUT TABS ----
 document.querySelectorAll(".tab-btn").forEach((btn) => {
