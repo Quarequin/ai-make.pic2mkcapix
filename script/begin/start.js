@@ -32,25 +32,25 @@ document.querySelector("body").insertAdjacentHTML('beforeend',`
 				<button class="popup-close-btn" id="popup-close-btn">
 					DISMISS
 				</button>
-		    </div>
-		    <div class="popup-body">
-		    	<p style="margin: 0 0 6px 0">
-		    		<strong>Error Type:</strong>
-		    		<span id="popup-err-type">N/A</span>
-		    	</p>
-			    <p style="margin: 0 0 10px 0">
-			    	<strong>Message:</strong>
-			    	<span id="popup-err-message">N/A</span>
-		    	</p>
-		    	<div class="popup-controls">
-	    			<button class="popup-toggle-btn" id="btn-toggle-log">
-	    				Show Full Log ▼
-	    			</button>
-	    		</div>
-	    		<textarea id="popup-err-stack" readonly>No trace details available.</textarea>
-	    	</div>
-    	</div>
-    </div>
+			</div>
+			<div class="popup-body">
+				<p style="margin: 0 0 6px 0">
+					<strong>Error Type:</strong>
+					<span id="popup-err-type">N/A</span>
+				</p>
+				<p style="margin: 0 0 10px 0">
+					<strong>Message:</strong>
+					<span id="popup-err-message">N/A</span>
+				</p>
+				<div class="popup-controls">
+					<button class="popup-toggle-btn" id="btn-toggle-log">
+						Show Full Log ▼
+					</button>
+				</div>
+				<textarea id="popup-err-stack" readonly>No trace details available.</textarea>
+			</div>
+		</div>
+	</div>
 </div>
 
 <div id="status">System Status: Awaiting Image Upload Asset...</div>
@@ -448,9 +448,11 @@ document.querySelector("body").insertAdjacentHTML('beforeend',`
 	<div class="preview-box">
 		<h3>Canvas Output</h3>
 		<div id="canvas-res" class="resolution-info">Size: 0 x 0</div>
-		<div class="output"><canvas></canvas></div>
+		<div class="output"><img id="output-image" alt="Processed image output" aria-hidden="true" style="width: 100%; height: auto; object-fit: contain; image-rendering: pixelated; background-image: linear-gradient(45deg, #222 25%, transparent 25%), linear-gradient(-45deg, #222 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #222 75%), linear-gradient(-45deg, transparent 75%, #222 75%); background-size: 10px 10px; background-position: 0 0, 0 5px, 5px -5px, -5px 0px; background-color: #151515; border-radius: 4px; padding: 5px; margin: 0 auto; display: block; visibility: hidden;"></div>
 	</div>
 </div>
+
+<canvas id="process-canvas" aria-hidden="true" style="display: block; position: fixed; left: -100000px; top: -100000px; width: 1px; height: 1px; max-width: 1px; max-height: 1px; box-sizing: border-box; padding: 0; opacity: 0; visibility: hidden; pointer-events: none;"></canvas>
 
 <div class="output-tabs" id="output-tabs">
 	<button class="tab-btn active" data-tab="pixelart">
