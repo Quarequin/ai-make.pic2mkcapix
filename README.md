@@ -1,7 +1,7 @@
 <h1 align="center">PIC2MKCAPIX</h1>
 <h2 align="center">Convert Picture to Makecode-arcade or Pixel-art</h2>
 
-<p align="center"><img src="pictest1.gif" alt="tested picture: rickroll #&x22;never gonna give you up#&x22;" width="100%"/></p>
+<p align="center"><img type="image/gif" src="pictest1.gif" alt="tested picture: rickroll &#x22;never gonna give you up&#x22;" width="256px"></p>
 
 visit at [page](https://quarequin.github.io/ai-make.pic2mkcapix)
 
