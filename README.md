@@ -1,7 +1,7 @@
 <h1 align="center">PIC2MKCAPIX</h1>
 <h2 align="center">Convert Picture to Makecode-arcade or Pixel-art</h2>
 
-<a href="https://arcade.makecode.com/S51805-37097-94553-76715" align="center"><img type="image/gif" src="pictest1.gif" alt="[makecode arcade] tested anim picture: rickroll meme" width="256px"></a>
+<p align="center"><a href="https://arcade.makecode.com/S51805-37097-94553-76715"><img type="image/gif" src="pictest1.gif" alt="[makecode arcade] tested anim picture: rickroll meme" width="256px"></a></p>
 
 visit at [page](https://quarequin.github.io/ai-make.pic2mkcapix)
 
