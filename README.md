@@ -1,11 +1,13 @@
 <h1 align="center">PIC2MKCAPIX</h1>
 <h2 align="center">Convert Picture to Makecode-arcade or Pixel-art</h2>
 
-visit at [page](https://quarequin.github.io/ai-make.pic2mkcapix)
+<p align="center"><a href="https://arcade.makecode.com/S51805-37097-94553-76715"><img type="image/gif" src="pictest1.gif" alt="[makecode arcade] tested anim picture: rickroll meme" width="256px"></a></p>
 
-download offline at [here](https://github.com/Quarequin/ai-make.pic2mkcapix/releases/latest/download/IM2MKCA.htm)
+visit at [page](https://quarequin.github.io/pic2mkcapix)
 
-download source at [here](https://github.com/Quarequin/ai-make.pic2mkcapix/raw/refs/heads/main/pack/IM2MKCAS.zip)
+download offline at [here](https://github.com/Quarequin/pic2mkcapix/releases/latest/download/IM2MKCA.htm)
+
+download source at [here](https://github.com/Quarequin/pic2mkcapix/raw/refs/heads/main/pack/IM2MKCAS.zip)
 <dl>
 <dt> note for anti-ai user:</dt>
 <dd> this project use <i>ai</i> to make project but you can fork this to make as human code sorry. :(</dd>
