@@ -3,11 +3,11 @@
 
 <p align="center"><a href="https://arcade.makecode.com/S51805-37097-94553-76715"><img type="image/gif" src="pictest1.gif" alt="[makecode arcade] tested anim picture: rickroll meme" width="256px"></a></p>
 
-visit at [page](https://quarequin.github.io/ai-make.pic2mkcapix)
+visit at [page](https://quarequin.github.io/pic2mkcapix)
 
-download offline at [here](https://github.com/Quarequin/ai-make.pic2mkcapix/releases/latest/download/IM2MKCA.htm)
+download offline at [here](https://github.com/Quarequin/pic2mkcapix/releases/latest/download/IM2MKCA.htm)
 
-download source at [here](https://github.com/Quarequin/ai-make.pic2mkcapix/raw/refs/heads/main/pack/IM2MKCAS.zip)
+download source at [here](https://github.com/Quarequin/pic2mkcapix/raw/refs/heads/main/pack/IM2MKCAS.zip)
 <dl>
 <dt> note for anti-ai user:</dt>
 <dd> this project use <i>ai</i> to make project but you can fork this to make as human code sorry. :(</dd>
