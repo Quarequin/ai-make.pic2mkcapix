@@ -403,7 +403,7 @@ No trace details available.</textarea>
 	</div>
 	<div class="action-buttons">
 		<button id="run" type="submit" disabled>Convert Image</button
-		><button id="copy" type="button" disabled>Copy to Clipboard</button
+		><button id="copy" type="button" disabled>Download Text</button
 		><button id="download" type="button" disabled>Download Image</button>
 	</div>
 </form>
@@ -453,9 +453,9 @@ No trace details available.</textarea>
 	aria-hidden="true"
 	style="
 		display: block;
-		position: fixed;
-		left: -100000px;
-		top: -100000px;
+		position: absolute;
+		margin-left: -100000px;
+		margin-top: -100000px;
 		width: 1px;
 		height: 1px;
 		max-width: 1px;
@@ -488,5 +488,4 @@ No trace details available.</textarea>
 		readonly
 	></textarea>
 </div>
-
 `);
