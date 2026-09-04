@@ -1968,21 +1968,21 @@ const BUTTON_STATES = Object.freeze({
 		run: !0,
 		copy: !0,
 		dl: !0,
-		copyText: "Download Text",
+		copyText: "Copy to Clipboard",
 		text: "Convert Image"
 	},
 	imageLoaded: {
 		run: !1,
 		copy: !0,
 		dl: !0,
-		copyText: "Download Text",
+		copyText: "Copy to Clipboard",
 		text: "Convert Image"
 	},
 	processing: {
 		run: !0,
 		copy: !0,
 		dl: !0,
-		copyText: "Download Text",
+		copyText: "Copy to Clipboard",
 		text: "Converting..."
 	},
 	almost: {
@@ -1996,15 +1996,15 @@ const BUTTON_STATES = Object.freeze({
 		run: !1,
 		copy: !1,
 		dl: !1,
-		copyText: "Download Text",
+		copyText: "Copy to Clipboard",
 		text: "Convert Image"
 	}
 });
 
 function setButtonState(e) {
 	const t = BUTTON_STATES[e] || BUTTON_STATES.noImage;
-	runButton.disabled = t.run, downloadTextButton.disabled = t.copy, downloadMediaButton.disabled = t.dl, 
-	downloadTextButton.textContent = t.copyText, "processing" !== e && (runButton.textContent = t.text);
+	runButton.disabled = t.run, copyButton.disabled = t.copy, downloadButton.disabled = t.dl, 
+	copyButton.textContent = t.copyText, "processing" !== e && (runButton.textContent = t.text);
 }
 
 setButtonState("noImage");
@@ -2226,7 +2226,7 @@ colorpad.querySelectorAll(".color-pair").forEach((e, t) => {
 		t.dataset.alpha = String(hexToRgba(e[a]).a));
 	}), reindexColorPairs(), statusDiv.textContent = `System: Loaded predefined "${this.value}" palette schema.`, 
 	addToSessionLog("PALETTE", `Switched layout to predefined scheme: ${this.value}`));
-}), palettemediaFileInput.addEventListener("change", function(e) {
+}), paletteFileInput.addEventListener("change", function(e) {
 	const t = e.target.files[0];
 	if (!t) return;
 	const a = new FileReader;
@@ -2247,9 +2247,9 @@ colorpad.querySelectorAll(".color-pair").forEach((e, t) => {
 			displayErrorPopup("Palette Processor Runtime Fault", e.message, e.stack);
 		}
 	}, a.readAsText(t);
-}), mediaFileInput.addEventListener("change", async function() {
+}), fileInput.addEventListener("change", async function() {
 	resetLoadedState();
-	const e = mediaFileInput.files[0];
+	const e = fileInput.files[0];
 	if (!e) return void (statusDiv.textContent = "Invalid: No image file. Try selecting an image such as PNG, JPG, GIF, APNG, WebP, or WebM.");
 	const t = sourceMime(e);
 	if (/^image\//.test(t) || "video/webm" === t) {
@@ -2535,7 +2535,7 @@ async function processAnimation(e, t) {
 		streamed: !0,
 		asciiFrames: asciiEnableCheck.checked
 	}, setOutputBlob(await r.finish()), setButtonState("almost"), isTextProcessing = !1, 
-	downloadTextButton.textContent = "Download Text";
+	copyButton.textContent = "Copy to Clipboard";
 }
 
 function makeOutputDelta(e, t, a, n, i) {
@@ -2686,41 +2686,106 @@ document.querySelectorAll('input[name="resize"], #factor').forEach(e => {
 			setButtonState("imageLoaded"), displayErrorPopup("Pipeline Processing Fatal Exception", e.message, e.stack);
 		}
 	}
+}), parametersForm.addEventListener("reset", async function(e) {
+	e.preventDefault()
+	document.getElementById('status').textContent = 'System Status: Awaiting Image Upload Asset...';
+	resetLoadedState();
+	previewContainer.style.display = "none";
+	previewContainer.setHTMLUnsafe(`
+	<div class="preview-box">
+		<h3>Original Input</h3>
+		<div id="original-res" class="resolution-info">Size: 0 x 0</div>
+		<div id="original-preview-zone"></div>
+	</div>
+	<div class="preview-box">
+		<h3>Canvas Output</h3>
+		<div id="canvas-res" class="resolution-info">Size: 0 x 0</div>
+		<div class="output">
+			<img
+				id="output-image"
+				alt="Processed image output"
+				aria-hidden="true"
+				style="
+					width: 100%;
+					height: auto;
+					object-fit: contain;
+					image-rendering: pixelated;
+					background-image:
+						linear-gradient(45deg, #222 25%, transparent 25%),
+						linear-gradient(-45deg, #222 25%, transparent 25%),
+						linear-gradient(45deg, transparent 75%, #222 75%),
+						linear-gradient(-45deg, transparent 75%, #222 75%);
+					background-size: 10px 10px;
+					background-position:
+						0 0,
+						0 5px,
+						5px -5px,
+						-5px 0px;
+					background-color: #151515;
+					border-radius: 4px;
+					padding: 5px;
+					margin: 0 auto;
+					display: block;
+					visibility: hidden;
+				"
+			/>
+		</div>
+	</div>
+	`)
 });
+;
 
 function getActiveOutputName() {
 	return document.getElementById("tab-ascii").classList.contains("active") ? "ascii" : "makecode";
 }
 
-async function downloadOutputString(value, flag) {
-	let temporaryBlob = new Blob([value], { type: 'text/plain' });
-	let temporaryLink = document.createElement('a');
-	temporaryLink.href = URL.createObjectURL(temporaryBlob);
-	temporaryLink.download = `${flag}_${canvasName.replace(".","_")}.txt`;
-	temporaryLink.click();
-	setTimeout(() => {
-		URL.revokeObjectURL(temporaryLink), temporaryLink.remove();
-	}, 0);
+async function copyOutputString(value) {
+	if (navigator.clipboard && window.isSecureContext) {
+		try {
+			await Promise.race([
+				navigator.clipboard.writeText(value),
+				new Promise((resolve, reject) => setTimeout(() => reject(new Error("Clipboard API timeout.")), 3000))
+			]);
+			return;
+		} catch (error) {
+			addToSessionLog("CLIPBOARD", `Clipboard API fallback: ${error.message}`);
+		}
+	}
+	const temporaryCopyArea = document.createElement("textarea");
+	temporaryCopyArea.value = value;
+	temporaryCopyArea.setAttribute("readonly", "");
+	temporaryCopyArea.style.position = "fixed";
+	temporaryCopyArea.style.left = "-100000px";
+	temporaryCopyArea.style.top = "0";
+	temporaryCopyArea.style.opacity = "0";
+	document.body.appendChild(temporaryCopyArea);
+	temporaryCopyArea.select();
+	const copied = document.execCommand("copy");
+	temporaryCopyArea.remove();
+	if (!copied) {
+		throw new Error("Denied copy.");
+	}
+	return copied;
 }
 
-downloadTextButton.addEventListener("click", async function(e) {
+copyButton.addEventListener("click", async function(e) {
 	e.preventDefault();
 	if (isTextProcessing) {
 		stopTextProcessingFlag = !0;
 		return;
 	}
 	try {
-		await downloadOutputString(getOutputString(getActiveOutputName()), getActiveOutputName());
-		downloadTextButton.textContent = "Text Downloaded!"
+		const copied = await copyOutputString(getOutputString(getActiveOutputName()));
+		copyButton.textContent = !copied ? "Copied!" : "Unable to Copy to clipboard.";
 		setTimeout(() => {
-			downloadTextButton.textContent = "Download Text";
+			copyButton.textContent = "Copy to Clipboard";
 		}, 2e3);
 	} catch (e) {
-		displayErrorPopup("Text Download Exception", "Unable to download result string", e.message);
+		displayErrorPopup("Clipboard Copy Exception", "Unable to copy to clipboard.", e.message);
 	}
-});
+	});
 
-downloadMediaButton.addEventListener("click", async function(e) {
+downloadButton.addEventListener("click", async function(e) {
 	e.preventDefault();
 	try {
 		if (processedAnimation?.streamed) {
