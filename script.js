@@ -1968,21 +1968,21 @@ const BUTTON_STATES = Object.freeze({
 		run: !0,
 		copy: !0,
 		dl: !0,
-		copyText: "Copy to Clipboard",
+		copyText: "Download Text",
 		text: "Convert Image"
 	},
 	imageLoaded: {
 		run: !1,
 		copy: !0,
 		dl: !0,
-		copyText: "Copy to Clipboard",
+		copyText: "Download Text",
 		text: "Convert Image"
 	},
 	processing: {
 		run: !0,
 		copy: !0,
 		dl: !0,
-		copyText: "Copy to Clipboard",
+		copyText: "Download Text",
 		text: "Converting..."
 	},
 	almost: {
@@ -1996,7 +1996,7 @@ const BUTTON_STATES = Object.freeze({
 		run: !1,
 		copy: !1,
 		dl: !1,
-		copyText: "Copy to Clipboard",
+		copyText: "Download Text",
 		text: "Convert Image"
 	}
 });
@@ -2535,7 +2535,7 @@ async function processAnimation(e, t) {
 		streamed: !0,
 		asciiFrames: asciiEnableCheck.checked
 	}, setOutputBlob(await r.finish()), setButtonState("almost"), isTextProcessing = !1, 
-	downloadTextButton.textContent = "Copy to Clipboard";
+	downloadTextButton.textContent = "Download Text";
 }
 
 function makeOutputDelta(e, t, a, n, i) {
@@ -2705,33 +2705,15 @@ function getActiveOutputName() {
 	return document.getElementById("tab-ascii").classList.contains("active") ? "ascii" : "makecode";
 }
 
-async function copyOutputString(value) {
-	if (navigator.clipboard && window.isSecureContext) {
-		try {
-			await Promise.race([
-				navigator.clipboard.writeText(value),
-				new Promise((resolve, reject) => setTimeout(() => reject(new Error("Clipboard API timeout.")), 3000))
-			]);
-			return;
-		} catch (error) {
-			addToSessionLog("CLIPBOARD", `Clipboard API fallback: ${error.message}`);
-		}
-	}
-	const temporaryCopyArea = document.createElement("textarea");
-	temporaryCopyArea.value = value;
-	temporaryCopyArea.setAttribute("readonly", "");
-	temporaryCopyArea.style.position = "fixed";
-	temporaryCopyArea.style.left = "-100000px";
-	temporaryCopyArea.style.top = "0";
-	temporaryCopyArea.style.opacity = "0";
-	document.body.appendChild(temporaryCopyArea);
-	temporaryCopyArea.select();
-	const copied = document.execCommand("copy");
-	temporaryCopyArea.remove();
-	if (!copied) {
-		throw new Error("Denied copy.");
-	}
-	return copied;
+async function downloadOutputString(value, flag) {
+	let temporaryBlob = new Blob([value], { type: 'text/plain' });
+	let temporaryLink = document.createElement('a');
+	temporaryLink.href = URL.createObjectURL(temporaryBlob);
+	temporaryLink.download = `${flag}_${canvasName.replace(".","_")}.txt`;
+	temporaryLink.click();
+	setTimeout(() => {
+		URL.revokeObjectURL(temporaryLink), temporaryLink.remove();
+	}, 0);
 }
 
 downloadTextButton.addEventListener("click", async function(e) {
@@ -2741,15 +2723,15 @@ downloadTextButton.addEventListener("click", async function(e) {
 		return;
 	}
 	try {
-		const copied = await copyOutputString(getOutputString(getActiveOutputName()));
-		downloadTextButton.textContent = !copied ? "Copied!" : "Unable to Copy to clipboard.";
+		await downloadOutputString(getOutputString(getActiveOutputName()), getActiveOutputName());
+		downloadTextButton.textContent = "Text Downloaded!"
 		setTimeout(() => {
-			downloadTextButton.textContent = "Copy to Clipboard";
+			downloadTextButton.textContent = "Download Text";
 		}, 2e3);
 	} catch (e) {
-		displayErrorPopup("Clipboard Copy Exception", "Unable to copy to clipboard.", e.message);
+		displayErrorPopup("Text Download Exception", "Unable to download result string", e.message);
 	}
-	});
+});
 
 downloadMediaButton.addEventListener("click", async function(e) {
 	e.preventDefault();
@@ -2762,6 +2744,10 @@ downloadMediaButton.addEventListener("click", async function(e) {
 			indexMap: lastIndexMap
 		}, lastW, lastH);
 		setOutputBlob(e), downloadBlob(e, canvasName);
+		downloadMediaButton.textContent = "Image Downloaded!"
+		setTimeout(() => {
+			downloadTextButton.textContent = "Download Image";
+		}, 2e3);
 	} catch (e) {
 		displayErrorPopup("IO Canvas Download Error", e.message, e.stack);
 	}
