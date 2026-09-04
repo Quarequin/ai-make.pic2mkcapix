@@ -2746,7 +2746,7 @@ downloadMediaButton.addEventListener("click", async function(e) {
 		setOutputBlob(e), downloadBlob(e, canvasName);
 		downloadMediaButton.textContent = "Image Downloaded!"
 		setTimeout(() => {
-			downloadTextButton.textContent = "Download Image";
+			downloadMediaButton.textContent = "Download Image";
 		}, 2e3);
 	} catch (e) {
 		displayErrorPopup("IO Canvas Download Error", e.message, e.stack);
