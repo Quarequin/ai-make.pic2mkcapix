@@ -258,7 +258,10 @@ input[disabled] { pointer-events: none; cursor: not-allowed; }
 	clear: both;
 }
 
-.action-buttons button {
+.action-buttons button,
+#navbar span a,
+.from-manage button
+{
 	display: block;
 	float: left;
 	width: 32%;
@@ -272,6 +275,12 @@ input[disabled] { pointer-events: none; cursor: not-allowed; }
 	font-size: 13px;
 	text-align: center;
 }
+
+#navbar span a { width: 32%; margin-bottom: 1em; text-decoration: none; }
+
+.from-manage button { width: 49%; margin-bottom: 1em; text-decoration: none; }
+
+#navbar span a:last-child, .from-manage button:last-child { margin-right: 0; }
 
 .action-buttons button:last-child {
 	margin-right: 0;
@@ -765,6 +774,15 @@ input[type="file"] {
 	 RESPONSIVE LAYER (Float & Percentages only)
 	 ========================================================================== */
 
+@media (min-width: 880px) {
+	#navbar {
+		display: none;
+		position: absolute;
+		left: -200%;
+		top: -200%;
+	}
+}
+
 @media (max-width: 1550px) {
 	.colorboard .colorpad .color-pair { width: 24.28%; margin: 2px 0.36%; }
 }
@@ -774,6 +792,16 @@ input[type="file"] {
 }
 
 @media (max-width: 880px) {
+	#size-settings:not(:target),
+	#palette-manager:not(:target),
+	#processing-option:not(:target)
+	{
+		display: none;
+		position: absolute;
+		left: -150%;
+		top: -150%;
+	}
+	#navbar { height: 2em; position: sticky; top: 3.3em; }
 	body { padding: 10px; }
 	#page-loader {
 		width: 100%;

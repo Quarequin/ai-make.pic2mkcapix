@@ -53,11 +53,22 @@ No trace details available.</textarea>
 	</div>
 </div>
 <div id="status">System Status: Awaiting Image Upload Asset...</div>
-<label>Select Target Source Image:</label><input type="file" id="file" />
 <form action="#" method="POST" id="parameters">
+	<div class="from-manage">
+		<button id="reload" width="50%" onclick="window.location.reload()">Reload Page</button>
+		<button id="reset" width="50%" type="reset" onclick="document.getElementById('status').textContent = 'System Status: Awaiting Image Upload Asset...'">Reset From</button>
+	</div>
+	<span><label width="100%">Select Target Source Image:</label><input type="file" id="file" /></span>
+	<div id="navbar">
+		<span align="center" style="width: 100%; height: 3em; margin-bottom: 3em;">
+			<a href="#size-settings">1.Size setting</a>
+			<a href="#processing-option">2.Process Edit</a>
+			<a href="#palette-manager">3.Palette Edit</a>
+		</span>
+	</div>
 	<div class="settings-group">
 		<div class="half">
-			<div class="size-settings-grid">
+			<div id="size-settings" class="size-settings-grid">
 				<label class="full-row"
 					><input
 						type="radio"
@@ -120,7 +131,7 @@ No trace details available.</textarea>
 					class="custom"
 				/>
 			</div>
-			<div class="dropdown-selection-group">
+			<div id="processing-option" class="dropdown-selection-group">
 				<label for="mode-select" class="dropdown-label"
 					>Render Options (Dithering Method):</label
 				><select id="mode-select" class="custom-dropdown">
@@ -224,7 +235,7 @@ No trace details available.</textarea>
 				</select>
 			</div>
 		</div>
-		<div class="colorboard">
+		<div id="palette-manager" class="colorboard">
 			<div class="palette-loader-container">
 				<label for="predefined-palette-select"
 					>Select Predefined Palette:</label
