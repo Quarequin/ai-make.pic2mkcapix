@@ -56,7 +56,7 @@ No trace details available.</textarea>
 <form action="#" method="POST" id="parameters">
 	<div class="from-manage">
 		<button id="reload" width="50%" onclick="window.location.reload()">Reload Page</button>
-		<button id="reset" width="50%" type="reset" onclick="document.getElementById('status').textContent = 'System Status: Awaiting Image Upload Asset...'">Reset From</button>
+		<button id="reset" width="50%" type="reset">Reset Form</button>
 	</div>
 	<span><label width="100%">Select Target Source Image:</label><input type="file" id="file" /></span>
 	<div id="navbar">
@@ -2645,15 +2645,19 @@ document.querySelectorAll('input[name="resize"], #factor').forEach(e => {
 	if (e.preventDefault(), !runButton.disabled) {
 		resetOutputString("makecode");
 		renderOutputViewport("makecode");
+		const fr = document.getElementById("reset");
 		try {
 			const e = document.querySelector("#original-preview-zone img, #original-preview-zone canvas");
 			if (!e) return;
+			fr.disabled = true;
+			isProcessing = true;
+			stopTextProcessingFlag = false;
 			canvasName = `${fileStem()}.${sourceExtension}`, processedAnimation = null, parseCurrentPalette();
 			const t = parseInt(inputWidth.value) || 16, a = parseInt(inputHeight.value) || 16;
 			if (Math.sqrt(a + t), canvas.width = t, canvas.height = a, setButtonState("processing"), 
 			runButton.textContent = "Converting...",
 			resetOutputString("makecode"), renderOutputViewport("makecode"),
-			resetOutputString("ascii"), renderOutputViewport("ascii"), animSource) return await processAnimation(t, a), setButtonState("done"), 
+			resetOutputString("ascii"), renderOutputViewport("ascii"), animSource) return await processAnimation(t, a), fr.disabled = false, setButtonState("done"), 
 			void (stopTextProcessingFlag ? statusDiv.textContent = "Text output generation stopped by user." : statusDiv.textContent = "Success: Animation conversion completed!");
 			ctx.globalCompositeOperation = "copy", ctx.clearRect(0, 0, t, a), ctx.drawImage(e, 0, 0, t, a), 
 			ctx.globalCompositeOperation = "source-over";
@@ -2685,55 +2689,17 @@ document.querySelectorAll('input[name="resize"], #factor').forEach(e => {
 		} catch (e) {
 			setButtonState("imageLoaded"), displayErrorPopup("Pipeline Processing Fatal Exception", e.message, e.stack);
 		}
+		fr.disabled = false;
 	}
 }), parametersForm.addEventListener("reset", async function(e) {
 	e.preventDefault()
 	document.getElementById('status').textContent = 'System Status: Awaiting Image Upload Asset...';
 	resetLoadedState();
 	previewContainer.style.display = "none";
-	previewContainer.setHTMLUnsafe(`
-	<div class="preview-box">
-		<h3>Original Input</h3>
-		<div id="original-res" class="resolution-info">Size: 0 x 0</div>
-		<div id="original-preview-zone"></div>
-	</div>
-	<div class="preview-box">
-		<h3>Canvas Output</h3>
-		<div id="canvas-res" class="resolution-info">Size: 0 x 0</div>
-		<div class="output">
-			<img
-				id="output-image"
-				alt="Processed image output"
-				aria-hidden="true"
-				style="
-					width: 100%;
-					height: auto;
-					object-fit: contain;
-					image-rendering: pixelated;
-					background-image:
-						linear-gradient(45deg, #222 25%, transparent 25%),
-						linear-gradient(-45deg, #222 25%, transparent 25%),
-						linear-gradient(45deg, transparent 75%, #222 75%),
-						linear-gradient(-45deg, transparent 75%, #222 75%);
-					background-size: 10px 10px;
-					background-position:
-						0 0,
-						0 5px,
-						5px -5px,
-						-5px 0px;
-					background-color: #151515;
-					border-radius: 4px;
-					padding: 5px;
-					margin: 0 auto;
-					display: block;
-					visibility: hidden;
-				"
-			/>
-		</div>
-	</div>
-	`)
+	const picEnv = document.querySelector("#original-preview-zone img, #original-preview-zone canvas")
+	if (!!picEnv) picEnv.value = null;
+	mediaFileInput.value = null;
 });
-;
 
 function getActiveOutputName() {
 	return document.getElementById("tab-ascii").classList.contains("active") ? "ascii" : "makecode";
@@ -2805,4 +2771,5 @@ downloadMediaButton.addEventListener("click", async function(e) {
 		e.classList.add("hidden");
 	}, 400);
 });
+
 //end

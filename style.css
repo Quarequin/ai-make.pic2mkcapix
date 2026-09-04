@@ -287,7 +287,9 @@ input[disabled] { pointer-events: none; cursor: not-allowed; }
 	display: block;
 }
 
-.action-buttons button:disabled {
+.action-buttons button:disabled,
+.from-manage button:disabled
+{
 	border-color: var(--border-color);
 	border-style: dashed;
 	color: #666;
