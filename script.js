@@ -2003,8 +2003,8 @@ const BUTTON_STATES = Object.freeze({
 
 function setButtonState(e) {
 	const t = BUTTON_STATES[e] || BUTTON_STATES.noImage;
-	runButton.disabled = t.run, copyButton.disabled = t.copy, downloadButton.disabled = t.dl, 
-	copyButton.textContent = t.copyText, "processing" !== e && (runButton.textContent = t.text);
+	runButton.disabled = t.run, downloadTextButton.disabled = t.copy, downloadMediaButton.disabled = t.dl, 
+	downloadTextButton.textContent = t.copyText, "processing" !== e && (runButton.textContent = t.text);
 }
 
 setButtonState("noImage");
@@ -2226,7 +2226,7 @@ colorpad.querySelectorAll(".color-pair").forEach((e, t) => {
 		t.dataset.alpha = String(hexToRgba(e[a]).a));
 	}), reindexColorPairs(), statusDiv.textContent = `System: Loaded predefined "${this.value}" palette schema.`, 
 	addToSessionLog("PALETTE", `Switched layout to predefined scheme: ${this.value}`));
-}), paletteFileInput.addEventListener("change", function(e) {
+}), palettemediaFileInput.addEventListener("change", function(e) {
 	const t = e.target.files[0];
 	if (!t) return;
 	const a = new FileReader;
@@ -2247,9 +2247,9 @@ colorpad.querySelectorAll(".color-pair").forEach((e, t) => {
 			displayErrorPopup("Palette Processor Runtime Fault", e.message, e.stack);
 		}
 	}, a.readAsText(t);
-}), fileInput.addEventListener("change", async function() {
+}), mediaFileInput.addEventListener("change", async function() {
 	resetLoadedState();
-	const e = fileInput.files[0];
+	const e = mediaFileInput.files[0];
 	if (!e) return void (statusDiv.textContent = "Invalid: No image file. Try selecting an image such as PNG, JPG, GIF, APNG, WebP, or WebM.");
 	const t = sourceMime(e);
 	if (/^image\//.test(t) || "video/webm" === t) {
@@ -2535,7 +2535,7 @@ async function processAnimation(e, t) {
 		streamed: !0,
 		asciiFrames: asciiEnableCheck.checked
 	}, setOutputBlob(await r.finish()), setButtonState("almost"), isTextProcessing = !1, 
-	copyButton.textContent = "Copy to Clipboard";
+	downloadTextButton.textContent = "Copy to Clipboard";
 }
 
 function makeOutputDelta(e, t, a, n, i) {
@@ -2768,7 +2768,7 @@ async function copyOutputString(value) {
 	return copied;
 }
 
-copyButton.addEventListener("click", async function(e) {
+downloadTextButton.addEventListener("click", async function(e) {
 	e.preventDefault();
 	if (isTextProcessing) {
 		stopTextProcessingFlag = !0;
@@ -2776,16 +2776,16 @@ copyButton.addEventListener("click", async function(e) {
 	}
 	try {
 		const copied = await copyOutputString(getOutputString(getActiveOutputName()));
-		copyButton.textContent = !copied ? "Copied!" : "Unable to Copy to clipboard.";
+		downloadTextButton.textContent = !copied ? "Copied!" : "Unable to Copy to clipboard.";
 		setTimeout(() => {
-			copyButton.textContent = "Copy to Clipboard";
+			downloadTextButton.textContent = "Copy to Clipboard";
 		}, 2e3);
 	} catch (e) {
 		displayErrorPopup("Clipboard Copy Exception", "Unable to copy to clipboard.", e.message);
 	}
 	});
 
-downloadButton.addEventListener("click", async function(e) {
+downloadMediaButton.addEventListener("click", async function(e) {
 	e.preventDefault();
 	try {
 		if (processedAnimation?.streamed) {
